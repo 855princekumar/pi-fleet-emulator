@@ -6,7 +6,7 @@
 # - Realistic /proc metrics (CPU/RAM/disk readable via SSH)
 # - Ansible-compatible (Python3 + sudo)
 
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ARG NODE_NAME=edge-node
 ARG NODE_USER=pi
