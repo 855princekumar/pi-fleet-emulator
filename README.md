@@ -8,9 +8,11 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 
 <!-- Project -->
 [![CI](https://github.com/855princekumar/pi-fleet-emulator/actions/workflows/ci.yml/badge.svg)](https://github.com/855princekumar/pi-fleet-emulator/actions/workflows/ci.yml)
+[![Release](https://github.com/855princekumar/pi-fleet-emulator/actions/workflows/release.yml/badge.svg)](https://github.com/855princekumar/pi-fleet-emulator/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/855princekumar/pi-fleet-emulator?sort=semver&logo=github)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-[![Version](https://img.shields.io/badge/version-1.0.0-informational)](#)
+[![Version](https://img.shields.io/badge/version-1.0.0-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#quick-start)
 
@@ -498,7 +500,9 @@ pi-fleet-emulator/
 ├── LICENSE-MIT
 ├── LICENSE-APACHE
 ├── assets/banner.svg           ← Animated hero banner
-├── .github/workflows/ci.yml    ← Lint + end-to-end fleet smoke test
+├── .github/workflows/
+│   ├── ci.yml                  ← Lint + end-to-end fleet smoke test (every push / PR)
+│   └── release.yml             ← Tag vX.Y.Z → Docker Hub images + GitHub Release
 ├── docker/
 │   ├── publish.sh              ← Multi-arch build + push to Docker Hub
 │   ├── DOCKERHUB-spawner.md    ← Docker Hub description (spawner)
@@ -543,14 +547,33 @@ The GUI is a thin client over a small JSON API, which you can also script agains
 
 ## Publishing to Docker Hub
 
-For maintainers. [docker/publish.sh](docker/publish.sh) builds both images for `linux/amd64` and `linux/arm64` and pushes `:<version>` and `:latest`:
+For maintainers. Releases are automated: git tag `vX.Y.Z` = image tag `X.Y.Z` = GitHub Release `vX.Y.Z`.
 
-```bash
-docker login -u devprincekumar
-./docker/publish.sh 1.0.0
+```mermaid
+flowchart LR
+    A["Push to main / PR"] --> B["CI<br/>lint + fleet smoke test"]
+    T["git push origin vX.Y.Z"] --> C["Release: version check"]
+    C --> D["Build amd64 + arm64<br/>labels · SBOM · provenance"]
+    D --> E["Docker Hub<br/>X.Y.Z · X.Y · X · latest<br/>+ description sync"]
+    E --> F["GitHub Release<br/>notes + compose file"]
 ```
 
-Then paste [docker/DOCKERHUB-spawner.md](docker/DOCKERHUB-spawner.md) and [docker/DOCKERHUB-node.md](docker/DOCKERHUB-node.md) into each repository's **Overview** on Docker Hub. When you bump the version, update the tags in `docker-compose.hub.yml` too.
+**One-time setup:** in the GitHub repo, **Settings → Secrets and variables → Actions**, add `DOCKERHUB_USERNAME` (`devprincekumar`) and `DOCKERHUB_TOKEN` (a Docker Hub personal access token with Read, Write and Delete scope).
+
+**To release:**
+
+1. Bump the version in `docker-compose.hub.yml` (both image tags), the README version badge, and the `VERSION` defaults in both Dockerfiles
+2. Commit and push to `main`, wait for CI to pass
+3. Tag and push:
+
+   ```bash
+   git tag -a v1.1.0 -m "Pi Fleet Emulator 1.1.0"
+   git push origin v1.1.0
+   ```
+
+The [Release workflow](.github/workflows/release.yml) refuses to run if the tag doesn't match the versions in the repo, then builds, pushes, syncs the descriptions from [docker/DOCKERHUB-spawner.md](docker/DOCKERHUB-spawner.md) / [docker/DOCKERHUB-node.md](docker/DOCKERHUB-node.md) and creates the GitHub Release.
+
+**Manual fallback** from your machine: `docker login -u devprincekumar && ./docker/publish.sh 1.1.0`.
 
 ---
 
