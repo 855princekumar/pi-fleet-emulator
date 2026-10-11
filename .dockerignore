@@ -1,0 +1,13 @@
+.git
+.github
+venv
+.venv
+**/__pycache__
+*.pyc
+fleet-config.json
+docker-compose.generated.yml
+pi-fleet-nodes.json
+.env
+assets
+*.md
+!node-base/**

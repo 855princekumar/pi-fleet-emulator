@@ -2,14 +2,18 @@
 set -e
 
 echo "============================================"
-echo "  EdgeShell Node: $NODE_NAME"
+echo "  Pi Fleet Emulator node: $NODE_NAME"
 echo "  Arch (sim): ${SIM_ARCH:-x86_64}"
 echo "  OS   (sim): ${SIM_OS:-Ubuntu 22.04}"
-echo "  SSH  User : $NODE_USER / raspberry"
+echo "  SSH  User : $NODE_USER"
 echo "============================================"
 
-# Generate SSH host keys
-[ ! -f /etc/ssh/ssh_host_rsa_key ] && ssh-keygen -A
+# Unique SSH host keys per container (none are shipped in the image)
+ssh-keygen -A >/dev/null
+
+# Login password from the environment, never baked into the image
+echo "$NODE_USER:${NODE_PASSWORD:-raspberry}" | chpasswd
+unset NODE_PASSWORD
 
 # Set hostname
 hostname "$NODE_NAME" 2>/dev/null || true

@@ -10,14 +10,13 @@ FROM ubuntu:22.04
 
 ARG NODE_NAME=edge-node
 ARG NODE_USER=pi
-ARG NODE_PASSWORD=raspberry
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_NAME=${NODE_NAME}
 ENV NODE_USER=${NODE_USER}
 
-# Install everything a real Pi would have
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install everything a real Pi would have (and pick up pending security updates)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     # SSH
     openssh-server \
     # Python (Ansible requirement)
@@ -35,23 +34,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates gnupg \
     # Misc
     sudo vim nano jq bc \
+    # openssh-server generates host keys on install: delete them in this same
+    # layer so they never exist in any image layer (each container makes its own)
+    && rm -f /etc/ssh/ssh_host_* \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20 LTS (Ubuntu 22.04's apt ships Node 12, too old for Node-RED 3.x)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+# Node.js 22 LTS (Ubuntu 22.04's apt ships Node 12, too old for Node-RED)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node-RED globally
-RUN npm install -g --unsafe-perm node-red@3.1.15
+# Current npm (the bundled one ships vulnerable deps), then Node-RED
+RUN npm install -g npm@12.2.0 \
+    && npm install -g node-red@5.0.8 \
+    && npm cache clean --force
 
-# Create the edge node user (mimics pi user on Raspberry Pi)
+# Create the edge node user (mimics pi user on Raspberry Pi).
+# The password is set at container start from NODE_PASSWORD (default: raspberry),
+# so it never lives in the image history.
 RUN useradd -m -s /bin/bash ${NODE_USER} \
-    && echo "${NODE_USER}:${NODE_PASSWORD}" | chpasswd \
     && usermod -aG sudo ${NODE_USER} \
     && echo "${NODE_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# SSH setup
+# SSH setup (host keys are generated per container by entrypoint.sh)
 RUN mkdir -p /var/run/sshd \
     && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
@@ -75,7 +80,7 @@ EXPOSE 22 1880
 
 # Labels last so changing values never bust the layer cache.
 # Filled in by docker/publish.sh; defaults keep plain `docker build` working
-ARG VERSION=1.0.0
+ARG VERSION=1.0.1
 ARG REVISION=unknown
 ARG CREATED=unknown
 

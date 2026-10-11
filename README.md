@@ -12,7 +12,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![GitHub release](https://img.shields.io/github/v/release/855princekumar/pi-fleet-emulator?sort=semver&logo=github)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-[![Version](https://img.shields.io/badge/version-1.0.0-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#quick-start)
 
@@ -33,8 +33,8 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-v2-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![Node-RED](https://img.shields.io/badge/Node--RED-3.1-8F0000?logo=nodered&logoColor=white)](https://nodered.org)
-[![Node.js](https://img.shields.io/badge/Node.js-20%20LTS-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Node-RED](https://img.shields.io/badge/Node--RED-5.0-8F0000?logo=nodered&logoColor=white)](https://nodered.org)
+[![Node.js](https://img.shields.io/badge/Node.js-22%20LTS-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![OpenSSH](https://img.shields.io/badge/SSH-OpenSSH-4EAA25?logo=gnubash&logoColor=white)](https://www.openssh.com/)
 [![MQTT](https://img.shields.io/badge/MQTT-Mosquitto-3C5280?logo=eclipsemosquitto&logoColor=white)](https://mosquitto.org)
 [![Ubuntu](https://img.shields.io/badge/base-Ubuntu%2022.04-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
@@ -403,7 +403,7 @@ Run `node-info` inside a node for a quick diagnostic summary.
 | Base SSH port | 3000 | Node 1 → host:3000, node 2 → host:3001, … |
 | Base Node-RED port | 4000 | Node 1 → host:4000, node 2 → host:4001, … |
 | Fleet subnet | `10.20.0.0/24` | Internal Docker network; nodes get `.20`, `.21`, … |
-| SSH user / password | `pi` / `raspberry` | Pi defaults |
+| SSH user / password | `pi` / `raspberry` | Pi defaults; change the password with `PFE_NODE_PASSWORD` |
 | Max nodes | 20 | Per fleet |
 
 Node names are normalised to lowercase letters, digits and dashes and become container names (`pi-emu-<name>`).
@@ -414,8 +414,12 @@ Node names are normalised to lowercase letters, digits and dashes and become con
 |---|---|---|
 | `PFE_DATA_DIR` | `/data` in Docker, repo root with `run.py` | Where `fleet-config.json` and `docker-compose.generated.yml` are kept |
 | `PFE_NODE_BASE` | `<repo>/node-base` | Build context for the Pi node image (used when `PFE_NODE_IMAGE` is empty) |
-| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.0` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
+| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.1` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
 | `PFE_PERSIST_HOME` | `1` | `1` = each node gets a persistent `/home/pi` volume, `0` = throwaway nodes |
+| `PFE_BIND_ADDR` | `127.0.0.1` | Host address for node SSH / Node-RED ports. `0.0.0.0` exposes them to the LAN (set a strong `PFE_NODE_PASSWORD` too) |
+| `PFE_NODE_PASSWORD` | `raspberry` | Password of the `pi` user on every node, set when each node starts |
+| `PFE_ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Hostnames the GUI/API answer to; requests with any other `Host` are refused (DNS-rebinding guard) |
+| `PFE_PROJECT` | `pi-fleet` | Compose project for the nodes. Use a different value per spawner when running several on one host |
 | `PFE_URL` | `http://127.0.0.1:7070` | Where the `pfe` CLI finds the spawner (when run outside the container) |
 
 ---
@@ -465,7 +469,10 @@ It also includes a resource consumption reference so you can size your fleet for
 This is a **local test bed**, not something to expose on a network.
 
 - **The spawner controls your Docker engine.** It mounts `/var/run/docker.sock`, which is root-equivalent on the host. Its port is bound to `127.0.0.1` only - keep it that way and don't put it behind a public proxy.
-- **Nodes use well-known credentials** (`pi` / `raspberry`, passwordless sudo), and their SSH and Node-RED ports are published on all interfaces so other containers and tools can reach them. On a shared or untrusted network, firewall ports 3000-3019 and 4000-4019, or spawn fewer nodes.
+- **The API refuses cross-site and DNS-rebinding requests.** Writes must be JSON from the same origin, any other `Host` header gets HTTP 403, and pages are served with a strict Content-Security-Policy and `X-Frame-Options: DENY`. A website you visit cannot spawn, stop or wipe your fleet.
+- **Nodes are localhost-only by default** (`PFE_BIND_ADDR=127.0.0.1`). Other containers still reach them via `host.docker.internal` on Docker Desktop. To expose them to the LAN set `PFE_BIND_ADDR=0.0.0.0` **and** a strong `PFE_NODE_PASSWORD`, since anyone who logs in has root (sudo) inside that node.
+- **Every node gets its own SSH host keys** at first start; none are shipped in the image.
+- **Supply chain:** CI pins every GitHub Action to a commit, scans both images for secrets and fixable critical CVEs on every push, and releases carry SBOM and provenance attestations. See [SECURITY.md](SECURITY.md) to report a vulnerability.
 - Node names, architectures, Debian versions, subnet and ports are validated before they reach the generated compose file.
 
 ---
@@ -481,7 +488,8 @@ This is a **local test bed**, not something to expose on a network.
 | `Pool overlaps with other one on this host` | Change **Fleet subnet** (e.g. `10.30.0`). |
 | SSH `Connection refused` right after spawn | sshd starts a few seconds after the container - retry. |
 | `ssh` warns *REMOTE HOST IDENTIFICATION HAS CHANGED* | Respawned nodes get new host keys: `ssh-keygen -R "[localhost]:3000"`. |
-| `host.docker.internal` doesn't resolve (Linux) | Add `extra_hosts: ["host.docker.internal:host-gateway"]` to your fleet manager's container, or use the shared-network option. |
+| `host.docker.internal` doesn't resolve or connect (Linux) | On Linux, localhost-bound ports aren't reachable from other containers. Use the shared-network option (**EdgeShell Network Bridge**), or set `PFE_BIND_ADDR=0.0.0.0` with a strong `PFE_NODE_PASSWORD`. |
+| API returns `Host not allowed` | You opened the GUI by a name other than `localhost` / `127.0.0.1`. Add it to `PFE_ALLOWED_HOSTS`. |
 | Removing everything | `pfe reset --yes` (or **Reset**), then `docker compose down -v` (also deletes the saved config volume). |
 
 ---

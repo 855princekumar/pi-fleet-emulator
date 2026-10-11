@@ -6,12 +6,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
       - name: Python syntax
@@ -30,7 +35,9 @@ jobs:
     env:
       PFE: docker exec pi-fleet-spawner pfe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Start spawner (build from source)
         run: |
@@ -66,6 +73,23 @@ jobs:
           timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3000; head -c 7 <&3' | grep -q SSH-2.0
           $PFE export | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['node_count']==2, d"
 
+      - name: API refuses cross-site, DNS-rebinding and non-JSON requests
+        run: |
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          B=http://127.0.0.1:7070
+          test "$(code -X POST -H 'Origin: http://evil.example' -H 'Content-Type: application/json' -d '{}' $B/api/clear-config)" = 403
+          test "$(code -X POST -H 'Content-Type: text/plain' -d x $B/api/clear-config)" = 415
+          test "$(code -H 'Host: attacker.example:7070' $B/api/export-edgeshell)" = 403
+          test "$(docker ps -q --filter name=pi-emu- | wc -l)" = 2
+          curl -sI $B/ | grep -qi '^x-frame-options: deny'
+
+      - name: Nodes have unique SSH host keys and are bound to localhost
+        run: |
+          a=$(docker exec pi-emu-node-1 ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub)
+          b=$(docker exec pi-emu-node-2 ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub)
+          test "$a" != "$b"
+          docker port pi-emu-node-1 22 | grep -q '^127.0.0.1:'
+
       - name: Reset removes nodes and all node volumes
         run: |
           $PFE reset --yes
@@ -83,3 +107,39 @@ jobs:
         run: |
           $PFE reset --yes || true
           docker compose down -v
+
+  security:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TRIVY_VERSION: 0.75.0
+      TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy (checksum verified)
+        run: |
+          curl -sSL -o trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c
+          tar -xzf trivy.tgz trivy && sudo mv trivy /usr/local/bin/
+
+      - name: Build images
+        run: |
+          docker build -t pfe/spawner:ci .
+          docker build -t pfe/node:ci node-base
+
+      - name: No secrets in images
+        run: |
+          trivy image --quiet --scanners secret --exit-code 1 pfe/spawner:ci
+          trivy image --quiet --scanners secret --exit-code 1 pfe/node:ci
+
+      - name: No fixable CRITICAL vulnerabilities
+        run: |
+          trivy image --quiet --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 pfe/spawner:ci
+          trivy image --quiet --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 pfe/node:ci
+
+      - name: No CRITICAL misconfigurations
+        run: trivy config --quiet --severity CRITICAL --exit-code 1 .

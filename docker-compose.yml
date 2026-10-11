@@ -38,6 +38,10 @@ services:
       PYTHONUNBUFFERED: "1"
       PFE_DATA_DIR: /data
       PFE_NODE_BASE: /app/node-base
+      # Node SSH/Node-RED ports: 127.0.0.1 = this machine only, 0.0.0.0 = whole LAN
+      PFE_BIND_ADDR: "127.0.0.1"
+      # Login for the pi user on every node - change it if nodes are reachable by others
+      PFE_NODE_PASSWORD: "raspberry"
     networks:
       - spawner_net
     healthcheck:

@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Install Docker CLI so the spawner can run docker compose commands
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
         gnupg \
@@ -20,7 +20,10 @@ WORKDIR /app
 
 # Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# then drop pip/setuptools/wheel: not needed at runtime, and they vendor their own CVEs
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y pip setuptools wheel \
+    && rm -rf /usr/local/lib/python3.11/ensurepip
 
 # Copy spawner app + the pfe command line
 COPY spawner/ ./spawner/
@@ -45,7 +48,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Labels last so changing values never bust the layer cache.
 # Filled in by docker/publish.sh; defaults keep plain `docker build` working
-ARG VERSION=1.0.0
+ARG VERSION=1.0.1
 ARG REVISION=unknown
 ARG CREATED=unknown
 

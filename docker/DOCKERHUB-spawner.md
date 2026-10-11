@@ -12,9 +12,9 @@ Spawn, scale and validate a **simulated Raspberry Pi fleet** in Docker. Every no
 
 | Tag | Platforms |
 |---|---|
-| `1.0.0`, `1.0`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
+| `1.0.1`, `1.0`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
 
-Pin `1.0.0` for reproducible setups. Images carry OCI labels, SBOM and provenance attestations.
+Pin `1.0.1` for reproducible setups. Images carry OCI labels, SBOM and provenance attestations.
 
 ## Quick start
 
@@ -23,7 +23,7 @@ Pin `1.0.0` for reproducible setups. Images carry OCI labels, SBOM and provenanc
 ```yaml
 services:
   pi-fleet-spawner:
-    image: devprincekumar/pi-fleet-spawner:1.0.0
+    image: devprincekumar/pi-fleet-spawner:1.0.1
     container_name: pi-fleet-spawner
     restart: unless-stopped
     ports:
@@ -32,8 +32,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock   # creates the Pi nodes
       - pi_fleet_data:/data                         # fleet config persists here
     environment:
-      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.0.0
+      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.0.1
       PFE_PERSIST_HOME: "1"                         # each node keeps its /home/pi
+      PFE_BIND_ADDR: "127.0.0.1"                    # node ports: this machine only
+      PFE_NODE_PASSWORD: "raspberry"                # pi login on every node
 
 volumes:
   pi_fleet_data:
@@ -75,7 +77,11 @@ Survives restarts, upgrades and reboots. `pfe reset --yes` deletes node data.
 |---|---|---|
 | `PFE_NODE_IMAGE` | - | Node image to run (set as above) |
 | `PFE_PERSIST_HOME` | `1` | `0` = throwaway nodes |
+| `PFE_BIND_ADDR` | `127.0.0.1` | `0.0.0.0` = expose node ports to the LAN |
+| `PFE_NODE_PASSWORD` | `raspberry` | `pi` login on every node |
+| `PFE_ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Hostnames the GUI answers to |
+| `PFE_PROJECT` | `pi-fleet` | Unique per spawner if you run several on one host |
 
 ## Security
 
-Local test bed: the spawner holds the Docker socket (keep `127.0.0.1`), and nodes use the well-known `pi` / `raspberry` login.
+Local test bed. The spawner holds the Docker socket, so its GUI stays on `127.0.0.1` and refuses cross-site and DNS-rebinding requests. Nodes are localhost-only by default with unique SSH host keys; set `PFE_NODE_PASSWORD` before exposing them with `PFE_BIND_ADDR=0.0.0.0`. [Security policy](https://github.com/855princekumar/pi-fleet-emulator/blob/main/SECURITY.md)

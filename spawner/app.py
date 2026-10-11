@@ -15,15 +15,71 @@ DATA_DIR     = os.environ.get('PFE_DATA_DIR', ROOT_DIR)
 NODE_BASE    = os.environ.get('PFE_NODE_BASE', os.path.join(ROOT_DIR, 'node-base'))
 COMPOSE_FILE = os.path.join(DATA_DIR, 'docker-compose.generated.yml')
 CONFIG_FILE  = os.path.join(DATA_DIR, 'fleet-config.json')
-PROJECT      = 'pi-fleet'   # fixed compose project name, wherever the file lives
+# Compose project for the nodes. Give each spawner on one host its own value, or
+# they will treat each other's nodes as orphans.
+PROJECT      = os.environ.get('PFE_PROJECT', 'pi-fleet').strip()
+if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', PROJECT):
+    raise SystemExit(f'PFE_PROJECT must be lowercase letters, digits, - or _, got {PROJECT!r}')
 MAX_NODES    = 20
 # Prebuilt node image (e.g. from Docker Hub). Empty = build it locally from NODE_BASE.
 NODE_IMAGE   = os.environ.get('PFE_NODE_IMAGE', '').strip()
 # Give every node a named volume for /home/pi (Node-RED flows, user files).
 PERSIST_HOME = os.environ.get('PFE_PERSIST_HOME', '1') != '0'
+# Host address node SSH / Node-RED ports bind to. 127.0.0.1 keeps them off the LAN
+# (other containers still reach them via host.docker.internal); 0.0.0.0 exposes them.
+BIND_ADDR    = os.environ.get('PFE_BIND_ADDR', '127.0.0.1').strip()
+# Password for the pi user on every node
+NODE_PASSWORD = os.environ.get('PFE_NODE_PASSWORD', 'raspberry')
+# Hostnames the GUI/API answer to. Anything else is refused (DNS-rebinding guard).
+ALLOWED_HOSTS = {h.strip().lower() for h in
+                 os.environ.get('PFE_ALLOWED_HOSTS', 'localhost,127.0.0.1,::1').split(',') if h.strip()}
+
+if not re.fullmatch(r'(\d{1,3}\.){3}\d{1,3}|::|::1', BIND_ADDR):
+    raise SystemExit(f'PFE_BIND_ADDR must be an IP address, got {BIND_ADDR!r}')
+if not NODE_PASSWORD or any(ord(c) < 32 or ord(c) == 127 for c in NODE_PASSWORD):
+    raise SystemExit('PFE_NODE_PASSWORD must be non-empty and contain no control characters')
 
 os.makedirs(DATA_DIR, exist_ok=True)
 FLEET_LOCK = threading.Lock()   # one compose operation at a time
+
+def _host_only(hostport):
+    """'localhost:7070' -> 'localhost', '[::1]:7070' -> '::1'."""
+    h = (hostport or '').strip().lower()
+    if h.startswith('['):
+        return h[1:h.find(']')] if ']' in h else h
+    return h.rsplit(':', 1)[0] if h.count(':') == 1 else h
+
+@app.before_request
+def guard_requests():
+    # DNS rebinding: a hostile domain resolving to 127.0.0.1 still sends its own Host
+    if _host_only(request.host) not in ALLOWED_HOSTS:
+        return jsonify({'error': 'Host not allowed (set PFE_ALLOWED_HOSTS)'}), 403
+    if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+        # CSRF: browsers always send Origin on cross-site POSTs; it must be this host
+        origin = request.headers.get('Origin')
+        if origin and origin != 'null':
+            from urllib.parse import urlsplit
+            if urlsplit(origin).netloc.lower() != request.host.lower():
+                return jsonify({'error': 'Cross-origin request refused'}), 403
+        elif origin == 'null':
+            return jsonify({'error': 'Cross-origin request refused'}), 403
+        # A JSON content type can't be sent cross-site without a CORS preflight,
+        # which this server never approves
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type must be application/json'}), 415
+
+@app.after_request
+def security_headers(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'no-referrer')
+    resp.headers.setdefault('Content-Security-Policy',
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+    return resp
 
 DEBIAN_VERSIONS = [
     {'id': 'bookworm', 'label': 'Debian 12 Bookworm (latest, recommended)'},
@@ -60,7 +116,9 @@ def service_name(name):
 
 def docker_ps():
     try:
-        r = subprocess.run(['docker','ps','--format','{{json .}}'],
+        # Only this spawner's nodes, never another fleet's on the same host
+        r = subprocess.run(['docker','ps','--filter', f'label=com.docker.compose.project={PROJECT}',
+                            '--format','{{json .}}'],
                            capture_output=True, text=True, timeout=8)
         result = []
         for line in r.stdout.strip().splitlines():
@@ -239,7 +297,9 @@ def health():
         engine = None
     return jsonify({'ok': engine is not None, 'docker_engine': engine,
                     'node_image': NODE_IMAGE or 'pi-fleet-node:local (built from source)',
-                    'persist_home': PERSIST_HOME, 'data_dir': DATA_DIR}), (200 if engine else 503)
+                    'persist_home': PERSIST_HOME, 'data_dir': DATA_DIR,
+                    'bind_addr': BIND_ADDR,
+                    'custom_password': NODE_PASSWORD != 'raspberry'}), (200 if engine else 503)
 
 NODE_CHECK = r"""
 uname -m
@@ -361,6 +421,9 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
     lines += ['','services:']
     context = NODE_BASE.replace('\\', '/')
     image   = NODE_IMAGE or 'pi-fleet-node:local'
+    bind    = f'[{BIND_ADDR}]' if ':' in BIND_ADDR else BIND_ADDR
+    # JSON string = valid YAML scalar; $$ stops compose variable interpolation
+    password = json.dumps(NODE_PASSWORD).replace('$', '$$')
     for i, node in enumerate(nodes):
         sname  = service_name(node['name'])
         arch   = node['arch']
@@ -383,9 +446,10 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
             f'      SIM_ARCH: "{arch}"',
             f'      SIM_OS: "{os_str}"',
             f'      SIM_DEBIAN: "{debian}"',
+            f'      NODE_PASSWORD: {password}',
             f'    ports:',
-            f'      - "{ssh_p}:22"',
-            f'      - "{nr_p}:1880"',
+            f'      - "{bind}:{ssh_p}:22"',
+            f'      - "{bind}:{nr_p}:1880"',
             f'    networks:',
             f'      {net}:',
             f'        ipv4_address: {ip}',
@@ -393,7 +457,6 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
         if es_network: lines.append(f'      {es_network}: {{}}')
         if PERSIST_HOME:
             lines += ['    volumes:', f'      - {sname}-home:/home/pi']
-        lines += ['    cap_add:','      - SYS_PTRACE']
     return '\n'.join(lines)+'\n'
 
 if __name__ == '__main__':
