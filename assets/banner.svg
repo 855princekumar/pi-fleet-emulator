@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 500" width="1280" height="500" role="img" aria-labelledby="t d">
+  <title id="t">Pi Fleet Emulator</title>
+  <desc id="d">One command starts the spawner; one click spawns a fleet of simulated Raspberry Pi nodes in Docker, each with real SSH and Node-RED, which your fleet tool manages over SSH.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#141c38"/>
+    </linearGradient>
+    <linearGradient id="pcb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17885a"/>
+      <stop offset="1" stop-color="#0f6142"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4f8b"/>
+      <stop offset="1" stop-color="#ffb86b"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity=".035"/>
+    </pattern>
+    <pattern id="gpio" width="8" height="6" patternUnits="userSpaceOnUse">
+      <rect x="1" y="1" width="4" height="3" fill="#e5bd55"/>
+    </pattern>
+    <g id="board">
+      <rect width="130" height="84" rx="8" fill="url(#pcb)" stroke="#3ddc97" stroke-opacity=".55"/>
+      <rect x="10" y="6" width="96" height="12" fill="url(#gpio)"/>
+      <rect x="40" y="30" width="30" height="30" rx="3" fill="#161b26" stroke="#3b4252"/>
+      <text x="55" y="49" text-anchor="middle" class="soc">ARM</text>
+      <rect x="76" y="34" width="14" height="22" rx="2" fill="#20252f"/>
+      <rect x="112" y="24" width="18" height="15" rx="2" fill="#c3cad4"/>
+      <rect x="112" y="44" width="18" height="15" rx="2" fill="#c3cad4"/>
+      <rect x="112" y="64" width="18" height="12" rx="2" fill="#9aa4b2"/>
+      <circle cx="14" cy="72" r="3" fill="#ff4d4d"/>
+    </g>
+    <style>
+      text { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; }
+      .mono, .term text { font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; }
+      .chip  { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; fill: #ff8fb3; }
+      .title { font-size: 54px; font-weight: 800; fill: #ffffff; letter-spacing: -1px; }
+      .tag   { font-size: 20px; fill: #c9d3ea; }
+      .feat  { font-size: 15px; fill: #aeb9d4; }
+      .feat tspan.b { fill: #ffffff; font-weight: 600; }
+      .term  { font-size: 13px; fill: #d7e0f5; }
+      .prompt { fill: #3ddc97; }
+      .ok    { fill: #3ddc97; }
+      .out   { fill: #ffb86b; }
+      .dim   { fill: #7f8bab; }
+      .lbl   { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; fill: #8fa0c8; }
+      .nm    { font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .meta  { font-size: 11px; fill: #8fa0c8; }
+      .soc   { font-size: 8px; font-weight: 700; fill: #8b95a7; }
+      .box   { fill: #182241; stroke: #2e3d6b; }
+      .flow  { fill: none; stroke: #60a5fa; stroke-width: 2; stroke-dasharray: 5 7; animation: dash 1.2s linear infinite; }
+      .flow.g { stroke: #3ddc97; }
+      .flow.p { stroke: #ff7aa8; }
+
+      .led   { animation: blink 1.1s steps(1, end) infinite; }
+      .led2  { animation-delay: .35s; animation-duration: .9s; }
+      .led3  { animation-delay: .7s;  animation-duration: 1.4s; }
+      .led4  { animation-delay: .2s;  animation-duration: .7s; }
+      .led5  { animation-delay: .5s;  animation-duration: 1.25s; }
+
+      .spawn { transform-box: fill-box; transform-origin: center; animation: pop .7s cubic-bezier(.2,.9,.3,1.3) both; }
+      .s1 { animation-delay: .3s; } .s2 { animation-delay: .6s; } .s3 { animation-delay: .9s; }
+      .s4 { animation-delay: 1.2s; } .s5 { animation-delay: 1.5s; } .s6 { animation-delay: 1.8s; }
+
+      .l1 { animation: l1 14s infinite; } .l2 { animation: l2 14s infinite; } .l3 { animation: l3 14s infinite; }
+      .l4 { animation: l4 14s infinite; } .l5 { animation: l5 14s infinite; } .l6 { animation: l6 14s infinite; }
+      .cursor { animation: blink 1s steps(1, end) infinite; fill: #3ddc97; }
+
+      @keyframes dash  { to { stroke-dashoffset: -24; } }
+      @keyframes blink { 0% { opacity: 1; } 50% { opacity: .15; } }
+      @keyframes pop   { from { opacity: 0; transform: translateY(14px) scale(.9); } to { opacity: 1; transform: none; } }
+      @keyframes l1 { 0%, 2%  { opacity: 0; } 4%, 93%  { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes l2 { 0%, 12% { opacity: 0; } 14%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes l3 { 0%, 26% { opacity: 0; } 28%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes l4 { 0%, 38% { opacity: 0; } 40%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes l5 { 0%, 50% { opacity: 0; } 52%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @keyframes l6 { 0%, 54% { opacity: 0; } 56%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .flow, .led, .spawn, .cursor, .l1, .l2, .l3, .l4, .l5, .l6 { animation: none; }
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="500" rx="18" fill="url(#bg)"/>
+  <rect width="1280" height="500" rx="18" fill="url(#grid)"/>
+  <rect x="0" y="0" width="1280" height="4" rx="2" fill="url(#accent)"/>
+
+  <!-- ── Left: pitch ─────────────────────────────── -->
+  <text x="56" y="64" class="chip">OPEN SOURCE · DOCKER · NO HARDWARE</text>
+  <text x="54" y="126" class="title">Pi Fleet Emulator</text>
+  <rect x="56" y="140" width="120" height="4" rx="2" fill="url(#accent)"/>
+  <text x="56" y="178" class="tag">A Raspberry Pi fleet in Docker - in one click.</text>
+
+  <g class="feat">
+    <circle cx="64" cy="211" r="5" fill="#3ddc97"/>
+    <text x="78" y="216"><tspan class="b">Real OpenSSH + Node-RED</tspan> on every node</text>
+    <circle cx="64" cy="239" r="5" fill="#60a5fa"/>
+    <text x="78" y="244">Reports <tspan class="b">aarch64 / armv7l</tspan> and Raspberry Pi OS</text>
+    <circle cx="64" cy="267" r="5" fill="#ff7aa8"/>
+    <text x="78" y="272">Up to <tspan class="b">20 nodes</tspan> · metrics · MQTT · JSON export</text>
+  </g>
+
+  <!-- Terminal -->
+  <g transform="translate(56 298)">
+    <rect width="500" height="176" rx="10" fill="#0a0f1e" stroke="#2a375e"/>
+    <circle cx="16" cy="15" r="5" fill="#ff5f57"/>
+    <circle cx="32" cy="15" r="5" fill="#febc2e"/>
+    <circle cx="48" cy="15" r="5" fill="#28c840"/>
+    <text x="250" y="19" text-anchor="middle" class="mono dim" font-size="11">bash</text>
+    <g class="term">
+      <text x="16" y="52"  class="l1"><tspan class="prompt">$</tspan> docker compose up -d</text>
+      <text x="16" y="74"  class="l2"><tspan class="ok">✔</tspan> pi-fleet-spawner started <tspan class="dim">→ http://localhost:7070</tspan></text>
+      <text x="16" y="96"  class="l3"><tspan class="prompt">$</tspan> ssh pi@localhost -p 3000</text>
+      <text x="16" y="118" class="l4"><tspan class="prompt">pi@pi-emu-node-1:~$</tspan> uname -m; grep PRETTY /etc/os-release</text>
+      <text x="16" y="140" class="l5 out">aarch64</text>
+      <text x="16" y="162" class="l6 out">PRETTY_NAME="Raspberry Pi OS 64-bit bookworm"<tspan class="cursor"> ▌</tspan></text>
+    </g>
+  </g>
+
+  <!-- ── Middle: spawner ─────────────────────────── -->
+  <text x="670" y="200" text-anchor="middle" class="lbl">ONE CLICK</text>
+  <g transform="translate(596 212)">
+    <rect width="148" height="88" rx="12" class="box"/>
+    <rect x="14" y="20" width="30" height="10" rx="3" fill="#60a5fa"/>
+    <rect x="14" y="34" width="30" height="10" rx="3" fill="#60a5fa" fill-opacity=".75"/>
+    <rect x="14" y="48" width="30" height="10" rx="3" fill="#60a5fa" fill-opacity=".5"/>
+    <text x="54" y="34" class="nm" font-size="16">Spawner</text>
+    <text x="54" y="51" class="mono meta">:7070 GUI</text>
+    <text x="54" y="67" class="mono meta">compose up</text>
+  </g>
+
+  <!-- spawner → fleet -->
+  <path class="flow" d="M744 256 C770 256 772 116 800 116"/>
+  <path class="flow" d="M744 256 C770 256 772 248 800 248"/>
+  <circle r="4" fill="#60a5fa"><animateMotion dur="2.2s" repeatCount="indefinite" path="M744 256 C770 256 772 116 800 116"/></circle>
+  <circle r="4" fill="#60a5fa"><animateMotion dur="2.2s" begin="1.1s" repeatCount="indefinite" path="M744 256 C770 256 772 248 800 248"/></circle>
+
+  <!-- spawner → export → tool -->
+  <path class="flow p" d="M670 300 V422 H780"/>
+  <text x="725" y="440" text-anchor="middle" class="mono meta" fill="#ff9fc0">export JSON</text>
+
+  <!-- ── Right: the fleet ────────────────────────── -->
+  <rect x="780" y="40" width="472" height="304" rx="14" fill="#0e1630" fill-opacity=".7" stroke="#3ddc97" stroke-opacity=".35" stroke-dasharray="6 6"/>
+  <text x="800" y="62" class="lbl">SIMULATED FLEET · <tspan class="mono" fill="#3ddc97" letter-spacing="0">pi_fleet_net 10.20.0.0/24</tspan></text>
+
+  <g transform="translate(800 74)"><g class="spawn s1"><use href="#board"/><circle cx="26" cy="72" r="3" fill="#3ddc97" class="led"/>
+    <text y="102" class="nm">node-1</text><text y="118" class="mono meta">aarch64 · :3000</text></g></g>
+  <g transform="translate(950 74)"><g class="spawn s2"><use href="#board"/><circle cx="26" cy="72" r="3" fill="#3ddc97" class="led led2"/>
+    <text y="102" class="nm">node-2</text><text y="118" class="mono meta">armv7l · :3001</text></g></g>
+  <g transform="translate(1100 74)"><g class="spawn s3"><use href="#board"/><circle cx="26" cy="72" r="3" fill="#3ddc97" class="led led3"/>
+    <text y="102" class="nm">node-3</text><text y="118" class="mono meta">aarch64 · :3002</text></g></g>
+  <g transform="translate(800 206)"><g class="spawn s4"><use href="#board"/><circle cx="26" cy="72" r="3" fill="#3ddc97" class="led led4"/>
+    <text y="102" class="nm">node-4</text><text y="118" class="mono meta">armv7l · :3003</text></g></g>
+  <g transform="translate(950 206)"><g class="spawn s5"><use href="#board"/><circle cx="26" cy="72" r="3" fill="#3ddc97" class="led led5"/>
+    <text y="102" class="nm">node-5</text><text y="118" class="mono meta">aarch64 · :3004</text></g></g>
+  <g transform="translate(1100 206)"><g class="spawn s6">
+    <rect width="130" height="84" rx="8" fill="none" stroke="#8fa0c8" stroke-opacity=".6" stroke-dasharray="5 5"/>
+    <text x="65" y="40" text-anchor="middle" class="nm" font-size="20" fill="#8fa0c8">+ 15</text>
+    <text x="65" y="60" text-anchor="middle" class="meta">more nodes</text>
+    <text y="102" class="nm" fill="#8fa0c8">up to 20</text><text y="118" class="mono meta">ssh :3000-3019</text></g></g>
+
+  <!-- ── Bottom right: your tool ─────────────────── -->
+  <g transform="translate(780 388)">
+    <rect width="472" height="72" rx="12" class="box"/>
+    <text x="20" y="28" class="lbl">YOUR FLEET TOOL</text>
+    <text x="20" y="52" class="feat"><tspan class="b">EdgeShell</tspan> · Ansible · CI pipelines · scripts</text>
+    <text x="452" y="52" text-anchor="end" class="mono meta" fill="#3ddc97">SSH · SFTP · MQTT</text>
+  </g>
+  <path class="flow g" d="M880 388 V346"/>
+  <path class="flow g" d="M1015 388 V346"/>
+  <path class="flow g" d="M1165 388 V346"/>
+  <circle r="3.5" fill="#3ddc97"><animateMotion dur="1.4s" repeatCount="indefinite" path="M880 388 V346"/></circle>
+  <circle r="3.5" fill="#3ddc97"><animateMotion dur="1.4s" begin=".45s" repeatCount="indefinite" path="M1015 388 V346"/></circle>
+  <circle r="3.5" fill="#3ddc97"><animateMotion dur="1.4s" begin=".9s" repeatCount="indefinite" path="M1165 388 V346"/></circle>
+</svg>

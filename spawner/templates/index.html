@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Fleet Emulator</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f1f5f9}
+.brand{background:linear-gradient(135deg,#1a56db,#7c3aed);color:#fff;padding:20px 28px;border-radius:14px;margin-bottom:24px}
+.node-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:8px;position:relative;transition:box-shadow .15s}
+.node-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.remove-btn{position:absolute;top:10px;right:10px;background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;line-height:1}
+.remove-btn:hover{color:#dc2626}
+.badge-32{background:#eff6ff;color:#1d4ed8;font-size:.65rem;padding:2px 7px;border-radius:8px;font-weight:600}
+.badge-64{background:#f0fdf4;color:#15803d;font-size:.65rem;padding:2px 7px;border-radius:8px;font-weight:600}
+.running-node{background:#fff;border:1px solid #d1fae5;border-left:4px solid #059669;border-radius:8px;padding:10px 14px;margin-bottom:6px}
+.saved-banner{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:16px}
+.terminal-log{background:#0d1117;color:#c9d1d9;font-family:'JetBrains Mono',monospace;font-size:12px;border-radius:8px;padding:14px;height:200px;overflow-y:auto;white-space:pre-wrap}
+.net-option{border:1.5px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:all .15s}
+.net-option:hover{border-color:#1a56db;background:#f8faff}
+.net-option.selected{border-color:#1a56db;background:#eff6ff}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+.pulse{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+code{background:#f3f4f6;border-radius:4px;padding:1px 5px;font-size:.85em}
+.btn-xs{padding:2px 8px;font-size:.72rem}
+</style>
+</head>
+<body>
+<div class="container py-4" style="max-width:980px">
+
+  <div class="brand d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-3">
+      <i class="bi bi-cpu-fill fs-2"></i>
+      <div>
+        <h4 class="fw-bold mb-0">Pi Fleet Emulator</h4>
+        <small style="opacity:.8">Spawn simulated Raspberry Pi nodes in Docker</small>
+      </div>
+    </div>
+    <div class="text-end">
+      <div class="fw-bold fs-3" id="runningCount">{{ running|length }}</div>
+      <div style="opacity:.8;font-size:.8rem">nodes running</div>
+    </div>
+  </div>
+
+  <!-- Saved config restore banner -->
+  <div id="savedBanner" class="saved-banner d-none">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <i class="bi bi-bookmark-check-fill text-warning me-2"></i>
+        <strong>Previous fleet config found.</strong>
+        <span class="text-muted ms-2" id="savedSummary"></span>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-warning" onclick="restoreConfig()">Restore into UI</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('savedBanner').classList.add('d-none')">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Left: configurator -->
+    <div class="col-12 col-lg-7">
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Fleet Nodes</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary" onclick="addNode('aarch64','bookworm')"><i class="bi bi-plus me-1"></i>64-bit</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="addNode('armv7l','bookworm')"><i class="bi bi-plus me-1"></i>32-bit</button>
+          </div>
+        </div>
+        <div class="card-body p-3">
+          <div id="nodeList"></div>
+          <div id="emptyMsg" class="text-center text-muted py-4 small">
+            <i class="bi bi-cpu fs-1 d-block mb-2 opacity-25"></i>
+            Click "64-bit" or "32-bit" to add nodes.
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-2">
+          <span class="fw-semibold small"><i class="bi bi-diagram-3 me-2 text-info"></i>Network &amp; Ports</span>
+        </div>
+        <div class="card-body p-3">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-medium">Fleet Subnet</label>
+              <input type="text" class="form-control form-control-sm font-monospace" id="network" value="10.20.0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-medium">Base SSH Port</label>
+              <input type="number" class="form-control form-control-sm" id="baseSsh" value="3000">
+              <div class="form-text">3000, 3001, 3002…</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-medium">Base Node-RED Port</label>
+              <input type="number" class="form-control form-control-sm" id="baseNr" value="4000">
+              <div class="form-text">4000, 4001, 4002…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EdgeShell network bridge -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-plugin me-2 text-success"></i>EdgeShell Network Bridge</span>
+          <button class="btn btn-xs btn-outline-secondary" onclick="detectNetworks()"><i class="bi bi-search me-1"></i>Detect</button>
+        </div>
+        <div class="card-body p-3">
+          <p class="small text-muted mb-2">If EdgeShell runs in Docker, attach nodes to the same network so EdgeShell can SSH using the container name (no port mapping needed).</p>
+          <div id="networkOptions" class="mb-2">
+            <div class="text-muted small">Click Detect to find EdgeShell's Docker network.</div>
+          </div>
+          <input type="hidden" id="selectedNetwork" value="">
+          <div class="alert alert-secondary small py-2 mb-0">
+            <strong>EdgeShell on host (python run.py):</strong> skip this - use <code>host.docker.internal</code> as the node IP in EdgeShell.
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-primary flex-grow-1 py-2 fw-semibold" id="spawnBtn" onclick="spawnFleet()">
+          <i class="bi bi-play-fill me-2"></i>Spawn Fleet
+        </button>
+        <button class="btn btn-outline-warning" onclick="stopFleet()" title="Stop containers, keep config">
+          <i class="bi bi-stop-fill me-1"></i>Stop
+        </button>
+        <button class="btn btn-outline-danger" onclick="resetAll()" title="Stop and wipe config">
+          <i class="bi bi-trash me-1"></i>Reset
+        </button>
+      </div>
+
+      <div id="logWrap" class="d-none">
+        <div class="small text-muted mb-1 fw-medium">Build Output</div>
+        <div class="terminal-log" id="buildLog">Waiting…</div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="col-12 col-lg-5">
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-server me-2 text-success"></i>Running Nodes</span>
+          <button class="btn btn-xs btn-outline-secondary" onclick="refreshStatus()"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div class="card-body p-3" id="runningList">
+          {% if running %}
+            {% for c in running %}
+            <div class="running-node">
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="status-dot pulse" style="background:#059669"></span>
+                  <span class="fw-semibold small">{{ c.Names }}</span>
+                </div>
+                <button class="btn btn-xs btn-outline-secondary" onclick="viewLogs('{{ c.Names }}')">Logs</button>
+              </div>
+              <div class="small text-muted font-monospace" style="font-size:.7rem">{{ c.Status }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+          <div class="text-center text-muted small py-3">No nodes running yet.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- How to connect -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom py-2">
+          <span class="fw-semibold small"><i class="bi bi-link-45deg me-2 text-primary"></i>Connect EdgeShell to Fleet</span>
+        </div>
+        <div class="card-body p-3 small">
+          <div class="fw-medium mb-2 text-success"><i class="bi bi-check-circle me-1"></i>EdgeShell on host (python run.py)</div>
+          <div class="bg-dark text-light rounded p-2 font-monospace mb-3" style="font-size:.72rem">
+            IP: localhost<br>
+            SSH Port: 3000 / 3001 / 3002…<br>
+            User: pi &nbsp; Password: raspberry
+          </div>
+
+          <div class="fw-medium mb-2 text-info"><i class="bi bi-box me-1"></i>EdgeShell in Docker</div>
+          <div class="bg-dark text-light rounded p-2 font-monospace mb-3" style="font-size:.72rem">
+            Option A - Shared network (Detect above):<br>
+            &nbsp; IP: pi-emu-node-1 &nbsp; Port: 22<br>
+            <br>
+            Option B - host.docker.internal:<br>
+            &nbsp; IP: host.docker.internal &nbsp; Port: 3000
+          </div>
+
+          <a href="/api/export-edgeshell" class="btn btn-outline-primary btn-sm w-100">
+            <i class="bi bi-download me-2"></i>Export as EdgeShell JSON
+          </a>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2">
+          <span class="fw-semibold small"><i class="bi bi-terminal me-2"></i>SSH Reference</span>
+        </div>
+        <div class="card-body p-2">
+          <div class="terminal-log" style="height:110px;font-size:11px" id="sshRef">
+# pi / raspberry
+ssh pi@localhost -p 3000
+ssh pi@localhost -p 3001</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Log modal -->
+<div class="modal fade" id="logModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="background:#0d1117">
+      <div class="modal-header border-0 py-2" style="background:#161b22">
+        <span class="fw-bold text-white small" id="logModalTitle">Logs</span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="terminal-log" id="logModalContent" style="height:360px">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let nodeIndex = 0, nodes = [], savedCfg = null;
+const DV = {{ debian_versions | tojson }};
+const AO = {{ arch_options | tojson }};
+
+// Load saved config on start
+document.addEventListener('DOMContentLoaded', async () => {
+  const r = await fetch('/api/saved-config');
+  const d = await r.json();
+  if (d.found) {
+    savedCfg = d.config;
+    const n  = (d.config.nodes||[]).length;
+    document.getElementById('savedSummary').textContent =
+      `${n} node${n!==1?'s':''} - click Restore to load into the form`;
+    document.getElementById('savedBanner').classList.remove('d-none');
+  }
+  refreshStatus();
+});
+
+function restoreConfig() {
+  if (!savedCfg) return;
+  nodes = []; nodeIndex = 0;
+  (savedCfg.nodes||[]).forEach(n => {
+    nodeIndex++;
+    nodes.push({id:nodeIndex, name:n.name, arch:n.arch||'aarch64', debian:n.debian||'bookworm'});
+  });
+  if (savedCfg.network)           document.getElementById('network').value  = savedCfg.network;
+  if (savedCfg.base_ssh_port)     document.getElementById('baseSsh').value  = savedCfg.base_ssh_port;
+  if (savedCfg.base_nr_port)      document.getElementById('baseNr').value   = savedCfg.base_nr_port;
+  if (savedCfg.edgeshell_network) {
+    document.getElementById('selectedNetwork').value = savedCfg.edgeshell_network;
+  }
+  renderNodeList();
+  document.getElementById('savedBanner').classList.add('d-none');
+}
+
+function addNode(arch, debian) {
+  nodeIndex++;
+  nodes.push({id:nodeIndex, name:`node-${nodeIndex}`, arch, debian});
+  renderNodeList();
+}
+function removeNode(id) {
+  nodes.splice(nodes.findIndex(n=>n.id===id), 1);
+  renderNodeList();
+}
+function updateNode(id,k,v) {
+  const n=nodes.find(n=>n.id===id);
+  if(n){n[k]=v; if(k==='arch') renderNodeList();}
+}
+function renderNodeList() {
+  document.getElementById('emptyMsg').style.display = nodes.length?'none':'';
+  document.getElementById('nodeList').innerHTML = nodes.map(n=>{
+    const is64=n.arch==='aarch64'||n.arch.includes('64');
+    const ab=is64?'<span class="badge-64">64-bit ARM64</span>':'<span class="badge-32">32-bit ARMv7</span>';
+    const do_=DV.map(d=>`<option value="${d.id}" ${d.id===n.debian?'selected':''}>${d.label}</option>`).join('');
+    const ao_=AO.map(a=>`<option value="${a.id}" ${a.id===n.arch?'selected':''}>${a.label}</option>`).join('');
+    return `<div class="node-card">
+      <button class="remove-btn" onclick="removeNode(${n.id})"><i class="bi bi-x-lg"></i></button>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <i class="bi bi-cpu-fill text-primary"></i>
+        <input type="text" class="form-control form-control-sm" style="max-width:150px"
+               value="${n.name}" oninput="updateNode(${n.id},'name',this.value)">
+        ${ab}
+      </div>
+      <div class="row g-2">
+        <div class="col-7"><select class="form-select form-select-sm" onchange="updateNode(${n.id},'arch',this.value)">${ao_}</select></div>
+        <div class="col-5"><select class="form-select form-select-sm" onchange="updateNode(${n.id},'debian',this.value)">${do_}</select></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function detectNetworks() {
+  document.getElementById('networkOptions').innerHTML='<div class="text-muted small">Scanning…</div>';
+  const r=await fetch('/api/detect-edgeshell-networks');
+  const d=await r.json();
+  if(!(d.networks||[]).length){
+    document.getElementById('networkOptions').innerHTML='<div class="text-muted small">None found. Is EdgeShell running in Docker?</div>';
+    return;
+  }
+  document.getElementById('networkOptions').innerHTML=d.networks.map(n=>`
+    <div class="net-option" id="net-${n.id}" onclick="selectNet('${n.id}')">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-diagram-3 text-info"></i>
+        <span class="small fw-medium">${n.label}</span>
+        <span class="badge bg-success bg-opacity-10 text-success ms-auto" style="font-size:.65rem">Found</span>
+      </div>
+    </div>`).join('');
+}
+function selectNet(name){
+  document.querySelectorAll('.net-option').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('net-'+name)?.classList.add('selected');
+  document.getElementById('selectedNetwork').value=name;
+}
+
+async function spawnFleet(){
+  if(!nodes.length){alert('Add at least one node.'); return;}
+  const btn=document.getElementById('spawnBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Building…';
+  document.getElementById('logWrap').classList.remove('d-none');
+  document.getElementById('buildLog').textContent='Sending to Docker…\n';
+
+  const payload={
+    nodes: nodes.map(n=>({name:n.name,arch:n.arch,debian:n.debian})),
+    network: document.getElementById('network').value||'10.20.0',
+    base_ssh_port: +document.getElementById('baseSsh').value||3000,
+    base_nr_port:  +document.getElementById('baseNr').value||4000,
+    edgeshell_network: document.getElementById('selectedNetwork').value||'',
+  };
+
+  try{
+    const r=await fetch('/api/spawn',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    document.getElementById('buildLog').textContent=d.error?'ERROR:\n'+d.error:`Launched! ${d.node_count} nodes running.\nConfig saved to fleet-config.json (survives restarts).`;
+    if(!d.error) setTimeout(refreshStatus,3000);
+  }catch(e){
+    document.getElementById('buildLog').textContent='Network error: '+e.message;
+  }
+  btn.disabled=false; btn.innerHTML='<i class="bi bi-play-fill me-2"></i>Spawn Fleet';
+}
+
+async function stopFleet(){
+  if(!confirm('Stop containers? Config will be kept - click Restore next time.')) return;
+  await fetch('/api/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keep_config:true})});
+  setTimeout(refreshStatus,1000);
+}
+async function resetAll(){
+  if(!confirm('Stop containers AND wipe saved config?')) return;
+  await fetch('/api/clear-config',{method:'POST'});
+  nodes=[]; nodeIndex=0; savedCfg=null;
+  renderNodeList();
+  document.getElementById('savedBanner').classList.add('d-none');
+  setTimeout(refreshStatus,1000);
+}
+
+async function refreshStatus(){
+  const r=await fetch('/api/status');
+  const d=await r.json();
+  document.getElementById('runningCount').textContent=d.count;
+  const list=document.getElementById('runningList');
+  if(!d.nodes.length){list.innerHTML='<div class="text-center text-muted small py-3">No nodes running.</div>'; return;}
+
+  const sshLines=d.nodes.filter(n=>n.ssh_port).map(n=>`ssh pi@localhost -p ${n.ssh_port}   # ${n.name}`).join('\n');
+  document.getElementById('sshRef').textContent='# pi / raspberry\n'+sshLines;
+
+  list.innerHTML=d.nodes.map(n=>`
+    <div class="running-node">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <div class="d-flex align-items-center gap-2">
+          <span class="status-dot pulse" style="background:#059669"></span>
+          <span class="fw-semibold small">${n.name}</span>
+        </div>
+        <button class="btn btn-xs btn-outline-secondary" onclick="viewLogs('${n.name}')">Logs</button>
+      </div>
+      <div class="small text-muted" style="font-size:.7rem">${n.status}</div>
+      ${n.ssh_port?`<div class="small text-muted font-monospace" style="font-size:.65rem">SSH :${n.ssh_port}  NR :${n.nr_port||'?'}</div>`:''}
+    </div>`).join('');
+}
+
+async function viewLogs(name){
+  document.getElementById('logModalTitle').textContent=name+' - Logs';
+  document.getElementById('logModalContent').textContent='Fetching…';
+  new bootstrap.Modal(document.getElementById('logModal')).show();
+  const r=await fetch('/api/logs/'+name);
+  const d=await r.json();
+  const el=document.getElementById('logModalContent');
+  el.textContent=d.logs||d.error||'(empty)';
+  el.scrollTop=el.scrollHeight;
+}
+
+setInterval(refreshStatus,15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+# ============================================================
+#  Pi Fleet Emulator - Spawner
+#
+#  Quick start:
+#    docker compose up -d
+#    open http://localhost:7070
+#
+#  The spawner GUI lets you:
+#    - Configure how many Pi nodes to spawn (up to 20)
+#    - Choose 32-bit (ARMv7) or 64-bit (ARM64) per node
+#    - Choose Debian version (Bookworm / Bullseye / Buster)
+#    - Spawn / stop the fleet with one click
+#    - Export fleet config for EdgeShell import
+#
+#  Spawned Pi nodes are managed as a separate compose project
+#  ("pi-fleet") from the generated file in the spawner_data volume.
+# ============================================================
+
+services:
+  pi-fleet-spawner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pi-fleet-emulator:latest
+    container_name: pi-fleet-spawner
+    restart: unless-stopped
+    ports:
+      # Bound to localhost only: the GUI controls your Docker engine.
+      - "127.0.0.1:7070:7070"
+    volumes:
+      # Docker socket - lets the spawner run docker commands on the host
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist fleet config and generated compose across restarts
+      - spawner_data:/data
+      # Mount node-base so edits apply without rebuilding the spawner
+      - ./node-base:/app/node-base:ro
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PFE_DATA_DIR: /data
+      PFE_NODE_BASE: /app/node-base
+    networks:
+      - spawner_net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7070/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  spawner_data:
+
+networks:
+  spawner_net:
+    driver: bridge

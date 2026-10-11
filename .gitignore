@@ -1,0 +1,21 @@
+# Generated at runtime - not for git
+docker-compose.generated.yml
+fleet-config.json
+pi-fleet-nodes.json
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
