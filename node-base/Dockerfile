@@ -1,20 +1,12 @@
-# EdgeShell Simulated Edge Node
-# Mimics a Raspberry Pi / industrial Linux edge device
+# Pi Fleet Emulator node: a simulated Raspberry Pi / Linux edge device
 # - Full SSH server (OpenSSH)
-# - systemd-like process management via supervisord
-# - Docker-in-Docker (simulates Docker running on the node)
-# - Node-RED (simulates IoT middleware)
+# - Process management via supervisord
+# - Simulated docker and systemctl commands
+# - Node-RED (IoT middleware) and Mosquitto MQTT tools
 # - Realistic /proc metrics (CPU/RAM/disk readable via SSH)
 # - Ansible-compatible (Python3 + sudo)
 
 FROM ubuntu:22.04
-
-LABEL org.opencontainers.image.title="Pi Fleet Emulator - Node" \
-      org.opencontainers.image.description="Simulated Raspberry Pi node: OpenSSH, Node-RED, ARM arch and Raspberry Pi OS reporting" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.licenses="MIT OR Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/855princekumar/pi-fleet-emulator" \
-      org.opencontainers.image.authors="855princekumar"
 
 ARG NODE_NAME=edge-node
 ARG NODE_USER=pi
@@ -80,5 +72,24 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/fake-docker-stats \
     /usr/local/bin/fake-metrics /usr/local/bin/node-info
 
 EXPOSE 22 1880
+
+# Labels last so changing values never bust the layer cache.
+# Filled in by docker/publish.sh; defaults keep plain `docker build` working
+ARG VERSION=1.0.0
+ARG REVISION=unknown
+ARG CREATED=unknown
+
+LABEL org.opencontainers.image.title="Pi Fleet Emulator Node" \
+      org.opencontainers.image.description="Simulated Raspberry Pi node: real OpenSSH and Node-RED, reports aarch64/armv7l and Raspberry Pi OS" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0" \
+      org.opencontainers.image.authors="855princekumar" \
+      org.opencontainers.image.vendor="855princekumar" \
+      org.opencontainers.image.url="https://hub.docker.com/r/devprincekumar/pi-fleet-node" \
+      org.opencontainers.image.documentation="https://github.com/855princekumar/pi-fleet-emulator#readme" \
+      org.opencontainers.image.source="https://github.com/855princekumar/pi-fleet-emulator" \
+      org.opencontainers.image.base.name="docker.io/library/ubuntu:22.04"
 
 ENTRYPOINT ["/entrypoint.sh"]

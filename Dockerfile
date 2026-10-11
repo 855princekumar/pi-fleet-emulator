@@ -1,12 +1,5 @@
 FROM python:3.11-slim
 
-LABEL org.opencontainers.image.title="Pi Fleet Emulator" \
-      org.opencontainers.image.description="Simulated Raspberry Pi fleet for testing edge deployments" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.licenses="MIT OR Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/855princekumar/pi-fleet-emulator" \
-      org.opencontainers.image.authors="855princekumar"
-
 # Install Docker CLI so the spawner can run docker compose commands
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -49,6 +42,25 @@ EXPOSE 7070
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -sf http://localhost:7070/api/health || exit 1
+
+# Labels last so changing values never bust the layer cache.
+# Filled in by docker/publish.sh; defaults keep plain `docker build` working
+ARG VERSION=1.0.0
+ARG REVISION=unknown
+ARG CREATED=unknown
+
+LABEL org.opencontainers.image.title="Pi Fleet Emulator Spawner" \
+      org.opencontainers.image.description="Web GUI, CLI and API that spawn, scale and validate simulated Raspberry Pi fleets in Docker" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0" \
+      org.opencontainers.image.authors="855princekumar" \
+      org.opencontainers.image.vendor="855princekumar" \
+      org.opencontainers.image.url="https://hub.docker.com/r/devprincekumar/pi-fleet-spawner" \
+      org.opencontainers.image.documentation="https://github.com/855princekumar/pi-fleet-emulator#readme" \
+      org.opencontainers.image.source="https://github.com/855princekumar/pi-fleet-emulator" \
+      org.opencontainers.image.base.name="docker.io/library/python:3.11-slim"
 
 CMD ["gunicorn", \
      "--workers", "1", \

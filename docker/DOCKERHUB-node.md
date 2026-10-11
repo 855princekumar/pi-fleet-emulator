@@ -1,44 +1,74 @@
-# Pi Fleet Emulator - Node
+# Pi Fleet Emulator · Node
 
-**A simulated Raspberry Pi in a container.** This is the node image used by [`devprincekumar/pi-fleet-spawner`](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner), which spawns, scales and validates fleets of up to 20 of these. **Start with the spawner** - it pulls this image for you.
+A **simulated Raspberry Pi** in a container: real **OpenSSH** and **Node-RED**, reports **aarch64 / armv7l** and **Raspberry Pi OS**, with simulated metrics, `docker`, `systemctl` and MQTT tools.
 
-[GitHub](https://github.com/855princekumar/pi-fleet-emulator) · [Spawner image + quick start](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner) · License: MIT or Apache 2.0
+Usually run by the **[spawner](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner)**, which spawns, scales and validates fleets of up to 20 nodes. Start there for a full fleet.
 
-**Tags:** `1.0.0`, `latest` · **Platforms:** `linux/amd64`, `linux/arm64`
+**[GitHub](https://github.com/855princekumar/pi-fleet-emulator)** · **[Docs](https://github.com/855princekumar/pi-fleet-emulator#readme)** · MIT or Apache-2.0
 
-## What's inside
+## Tags
 
-| Feature | Detail |
+| Tag | Platforms |
 |---|---|
-| SSH | Real OpenSSH on port 22, user `pi` / `raspberry`, passwordless sudo |
-| Node-RED | 3.1 on Node.js 20, port 1880, user dir `/home/pi/.node-red` |
-| Architecture | `uname -m` and Python `platform.machine()` report `SIM_ARCH` (`aarch64` / `armv7l`) |
-| OS | `/etc/os-release` reports Raspberry Pi OS (Debian 12 / 11 / 10 from `SIM_DEBIAN`) |
-| Metrics | Simulated CPU, RAM, disk, temperature in `/tmp/metrics/summary.txt`, `/tmp/fake_temp` |
-| Tools | Simulated `docker` and `systemctl`, `mosquitto` + clients, `stress-ng`, `jq`, `htop`, `curl` |
-| Base | Ubuntu 22.04, services run under supervisord |
+| `1.0.0`, `1.0`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
 
-## Run one node on its own
+Images carry OCI labels, SBOM and provenance attestations.
 
-```bash
-docker run -d --name pi-node-1 --hostname pi-node-1 -p 3000:22 -p 4000:1880 \
-  -e NODE_NAME=pi-node-1 -e SIM_ARCH=aarch64 -e SIM_DEBIAN=bookworm \
-  -e SIM_OS="Raspberry Pi OS 64-bit bookworm" \
-  -v pi-node-1-home:/home/pi \
-  devprincekumar/pi-fleet-node:1.0.0
+## Run nodes without the spawner
 
-ssh pi@localhost -p 3000     # password: raspberry
+`docker-compose.yml`
+
+```yaml
+services:
+  pi-node-1:
+    image: devprincekumar/pi-fleet-node:1.0.0
+    hostname: pi-node-1
+    restart: unless-stopped
+    ports:
+      - "3000:22"        # SSH
+      - "4000:1880"      # Node-RED
+    environment:
+      NODE_NAME: pi-node-1
+      SIM_ARCH: aarch64                  # or armv7l
+      SIM_DEBIAN: bookworm               # bullseye, buster
+      SIM_OS: "Raspberry Pi OS 64-bit bookworm"
+    volumes:
+      - pi-node-1-home:/home/pi          # keeps Node-RED flows and files
+
+  pi-node-2:
+    image: devprincekumar/pi-fleet-node:1.0.0
+    hostname: pi-node-2
+    restart: unless-stopped
+    ports:
+      - "3001:22"
+      - "4001:1880"
+    environment:
+      NODE_NAME: pi-node-2
+      SIM_ARCH: armv7l
+      SIM_DEBIAN: bullseye
+      SIM_OS: "Raspberry Pi OS 32-bit bullseye"
+    volumes:
+      - pi-node-2-home:/home/pi
+
+volumes:
+  pi-node-1-home:
+  pi-node-2-home:
 ```
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `NODE_NAME` | `edge-node` | Node name used in logs and `uname -a` (set the hostname with `--hostname`) |
-| `SIM_ARCH` | `x86_64` | Reported architecture: `aarch64` or `armv7l` |
-| `SIM_DEBIAN` | `bookworm` | `bookworm`, `bullseye` or `buster` |
-| `SIM_OS` | `Raspberry Pi OS Lite` | `PRETTY_NAME` in `/etc/os-release` |
+```bash
+docker compose up -d
+ssh pi@localhost -p 3000     # password: raspberry
+uname -m                     # aarch64
+```
 
-Mount a volume on `/home/pi` to keep Node-RED flows and files across restarts.
+## Inside each node
 
-> Local test bed only: the credentials are well known. Nodes report ARM but run on the host CPU.
+| | |
+|---|---|
+| SSH | Port 22, `pi` / `raspberry`, passwordless sudo |
+| Node-RED | 3.1 on Node.js 20, port 1880 |
+| Reports | `uname -m`, `platform.machine()`, `/etc/os-release` |
+| Metrics | `/tmp/metrics/summary.txt`, `/tmp/fake_temp` |
+| Tools | `mosquitto`, `stress-ng`, `jq`, `curl`, simulated `docker` / `systemctl` |
 
-Free and open source by [855princekumar](https://github.com/855princekumar).
+Local test bed: the login is well known. Nodes report ARM but run on the host CPU.
