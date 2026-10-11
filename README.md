@@ -14,6 +14,13 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#quick-start)
 
+<!-- Docker Hub -->
+[![Docker Hub spawner](https://img.shields.io/docker/v/devprincekumar/pi-fleet-spawner?sort=semver&logo=docker&logoColor=white&label=docker%20hub)](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner)
+[![Docker pulls](https://img.shields.io/docker/pulls/devprincekumar/pi-fleet-spawner?logo=docker&logoColor=white)](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner)
+[![Spawner size](https://img.shields.io/docker/image-size/devprincekumar/pi-fleet-spawner/latest?logo=docker&logoColor=white&label=spawner)](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner)
+[![Node size](https://img.shields.io/docker/image-size/devprincekumar/pi-fleet-node/latest?logo=docker&logoColor=white&label=node)](https://hub.docker.com/r/devprincekumar/pi-fleet-node)
+[![Image platforms](https://img.shields.io/badge/images-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](#quick-start)
+
 <!-- What gets simulated -->
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-simulated-C51A4A?logo=raspberrypi&logoColor=white)](#what-each-node-simulates)
 [![Arch](https://img.shields.io/badge/arch-aarch64%20%7C%20armv7l-orange)](#fleet-configuration)
@@ -30,7 +37,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![MQTT](https://img.shields.io/badge/MQTT-Mosquitto-3C5280?logo=eclipsemosquitto&logoColor=white)](https://mosquitto.org)
 [![Ubuntu](https://img.shields.io/badge/base-Ubuntu%2022.04-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
 
-**[Quick Start](#quick-start)** · **[Features](#features)** · **[Architecture](#architecture)** · **[Test Playground](TEST-PLAYGROUND.md)** · **[API](#api)** · **[Troubleshooting](#troubleshooting)**
+**[Quick Start](#quick-start)** · **[Docker Hub](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner)** · **[CLI](#cli-spawn-scale-validate)** · **[Persistent Data](#persistent-data)** · **[Features](#features)** · **[Architecture](#architecture)** · **[Test Playground](TEST-PLAYGROUND.md)** · **[API](#api)**
 
 </div>
 
@@ -40,12 +47,14 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 
 | | |
 |---|---|
-| **What** | A web GUI that spawns 1-20 Docker containers, each one looking like a Raspberry Pi over SSH |
+| **What** | A web GUI + CLI that spawns 1-20 Docker containers, each one looking like a Raspberry Pi over SSH |
 | **Who it's for** | Anyone building or testing fleet managers, deployment pipelines, Ansible playbooks, OTA updaters or IoT dashboards |
-| **How** | `docker compose up -d` → open `localhost:7070` → add nodes → **Spawn Fleet** |
+| **How** | `docker compose -f docker-compose.hub.yml up -d` → open `localhost:7070` → **Spawn Fleet** (or `pfe spawn 3`) |
 | **You get** | Per node: real SSH on `:3000+`, real Node-RED on `:4000+`, ARM arch, Raspberry Pi OS, metrics, MQTT tools |
 | **Then** | Point your tool at the fleet - or export `pi-fleet-nodes.json` and import it into EdgeShell |
-| **Reset** | One click. Respawn a clean fleet in seconds. |
+| **Scale & test** | `pfe scale 10` grows the fleet live; `pfe validate` checks every node and prints PASS / FAIL |
+| **Keeps data** | Fleet config and each node's `/home/pi` live in Docker volumes and survive restarts |
+| **Reset** | One click (or `pfe reset --yes`). Respawn a clean fleet in seconds. |
 
 ---
 
@@ -55,6 +64,10 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 - [Features](#features)
 - [Why This Exists](#why-this-exists)
 - [Quick Start](#quick-start)
+  - [Option A: Docker Hub images (no clone)](#option-a-docker-hub-images-no-clone)
+  - [Option B: build from source](#option-b-build-from-source)
+- [CLI: Spawn, Scale, Validate](#cli-spawn-scale-validate)
+- [Persistent Data](#persistent-data)
 - [Architecture](#architecture)
 - [What Each Node Simulates](#what-each-node-simulates)
 - [Fleet Configuration](#fleet-configuration)
@@ -63,6 +76,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 - [Security Notes](#security-notes)
 - [Troubleshooting](#troubleshooting)
 - [Project Structure](#project-structure) · [API](#api)
+- [Publishing to Docker Hub](#publishing-to-docker-hub)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -113,7 +127,30 @@ Export the running fleet as JSON for EdgeShell, or script everything through the
 
 **✅ Tested in CI**
 
-Every push builds the images, spawns a 2-node fleet and checks the arch, OS, SSH, Node-RED, MQTT and the export.
+Every push builds the images, spawns a fleet, then checks validation, scaling, persistence, ports, the export and reset.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🐳 Ready-made images**
+
+Multi-arch images on Docker Hub (amd64 + arm64). One compose file, no clone, no local build. Runs on Windows, macOS (incl. Apple Silicon), Linux and Raspberry Pi 4/5.
+
+</td>
+<td valign="top">
+
+**📈 Scale and validate**
+
+`pfe scale 10` adds nodes without touching running ones. `pfe validate` checks arch, OS, SSH, Node-RED, metrics and node-to-node MQTT, with a CI-friendly exit code.
+
+</td>
+<td valign="top">
+
+**💾 Persistent data**
+
+Fleet config and every node's `/home/pi` (Node-RED flows, your files) live in named volumes. Stop, restart, upgrade or reboot: it all comes back.
 
 </td>
 </tr>
@@ -144,18 +181,36 @@ To any SSH-based management tool, the fleet looks like real hardware. Tear it do
 
 **Prerequisites:** Docker Desktop (Windows/macOS) or Docker Engine with the Compose plugin (Linux).
 
+### Option A: Docker Hub images (no clone)
+
+Fastest. Pulls the prebuilt [spawner](https://hub.docker.com/r/devprincekumar/pi-fleet-spawner) and [node](https://hub.docker.com/r/devprincekumar/pi-fleet-node) images, so nothing is built on your machine.
+
+```bash
+curl -O https://raw.githubusercontent.com/855princekumar/pi-fleet-emulator/main/docker-compose.hub.yml
+docker compose -f docker-compose.hub.yml up -d
+docker exec pi-fleet-spawner pfe spawn 3 --validate
+```
+
+That's a running, validated 3-node fleet. On Windows PowerShell, use `curl.exe -O ...` or just copy [docker-compose.hub.yml](docker-compose.hub.yml) by hand.
+
+### Option B: build from source
+
 ```bash
 git clone https://github.com/855princekumar/pi-fleet-emulator.git
 cd pi-fleet-emulator
 docker compose up -d
 ```
 
+The first spawn builds the node image locally (2-5 minutes); later spawns take seconds.
+
+### Use the GUI
+
 Open **http://localhost:7070**, then:
 
 1. Click **+ 64-bit** or **+ 32-bit** for each Pi node you want
 2. Name each node and choose a Debian version
 3. Click **Spawn Fleet**
-4. Nodes appear under **Running Nodes** - the first spawn builds the node image and takes 2-5 minutes; later spawns take seconds
+4. Nodes appear under **Running Nodes**. Click **Validate** to check them all
 
 Verify a node:
 
@@ -166,13 +221,13 @@ cat /etc/os-release | head -3   # Raspberry Pi OS
 cat /tmp/metrics/summary.txt    # simulated metrics
 ```
 
-**Stop:** click **Stop** in the GUI (keeps your config), or the red **Reset** button to also forget it. Then stop the spawner itself:
+**Stop:** click **Stop** in the GUI (keeps config and node data), or the red **Reset** button to remove the nodes, the config and all node data. Then stop the spawner itself:
 
 ```bash
-docker compose down
+docker compose down          # add -f docker-compose.hub.yml for Option A
 ```
 
-The fleet config persists in a Docker volume - next time, click **Restore into UI** to reload it.
+Everything persists in Docker volumes - next time, click **Restore into UI** to reload the fleet. See [Persistent Data](#persistent-data).
 
 <details>
 <summary><b>Alternative: run the spawner without Docker (Python 3.10+)</b></summary>
@@ -186,6 +241,71 @@ python run.py
 `run.py` creates a `venv/`, installs `requirements.txt`, checks Docker is reachable and serves the GUI on http://localhost:7070. Fleet config and the generated compose file are written to the repo root (both gitignored).
 
 </details>
+
+---
+
+## CLI: Spawn, Scale, Validate
+
+The spawner image ships a small CLI, `pfe`, that does everything the GUI does. It's ideal for scripts and CI.
+
+```bash
+docker exec pi-fleet-spawner pfe <command>
+```
+
+| Command | What it does |
+|---|---|
+| `pfe spawn 5` | Fresh fleet of 5 nodes, alternating 64-bit / 32-bit. Options: `--arch aarch64\|armv7l\|mixed`, `--debian bookworm\|bullseye\|buster`, `--subnet 10.30.0`, `--ssh-port 5000`, `--nr-port 6000` |
+| `pfe scale 10` | Grow or shrink the saved fleet to 10. Running nodes are left untouched |
+| `pfe validate` | Checks every node: running, arch, OS, SSH, Node-RED, metrics, plus node-to-node MQTT. Exit code `0` only if all pass |
+| `pfe status` | Nodes with their SSH and Node-RED host ports (`--json` for scripts) |
+| `pfe health` | Confirms the spawner can reach Docker; shows the node image and data dir |
+| `pfe stop` | Stops all nodes, keeps config and node data |
+| `pfe reset --yes` | Removes all nodes, the saved config and every node's data volume |
+| `pfe export > nodes.json` | The fleet as JSON for EdgeShell or other tools |
+
+Add `--validate` to `spawn` or `scale` to check the fleet as soon as it's up. It waits up to `--wait 120` seconds for services such as Node-RED to start.
+
+```
+$ docker exec pi-fleet-spawner pfe scale 3 --validate
+Spawning 3 node(s)... (first run pulls/builds the node image)
+OK: 3 node(s) up
+NODE                  ARCH     RUNNING   ARCH      OS        SSH       NODE_RED  METRICS
+pi-emu-node-1         aarch64  PASS      PASS      PASS      PASS      PASS      PASS
+pi-emu-node-2         armv7l   PASS      PASS      PASS      PASS      PASS      PASS
+pi-emu-node-3         aarch64  PASS      PASS      PASS      PASS      PASS      PASS
+
+MQTT pi-emu-node-2 -> pi-emu-node-1: PASS
+
+3/3 nodes running. Fleet: PASS
+```
+
+The same check is in the GUI (**Validate** button) and the API (`GET /api/validate`, HTTP 200 on pass, 503 on fail).
+
+---
+
+## Persistent Data
+
+Everything that matters lives in Docker named volumes, so it survives container restarts, image upgrades and host reboots. The spawner and nodes use `restart: unless-stopped`, so a rebooted machine brings the fleet back by itself.
+
+| Volume | Contents | Removed by |
+|---|---|---|
+| `pi_fleet_data` (Option A) / `<folder>_spawner_data` (Option B) | Fleet config + generated compose file (spawner `/data`) | `docker compose down -v` |
+| `pi-fleet_pi-emu-<name>-home` | Each node's `/home/pi`: Node-RED flows (`~/.node-red`), files you copy in | **Reset** / `pfe reset --yes` |
+
+| Action | Containers | Config | Node data |
+|---|---|---|---|
+| **Stop** / `pfe stop` | removed | kept | kept |
+| `pfe scale N` (down) | extra nodes removed | updated | kept (scale back up to restore) |
+| Restart / upgrade the spawner | nodes keep running | kept | kept |
+| **Reset** / `pfe reset --yes` | removed | deleted | deleted |
+
+Set `PFE_PERSIST_HOME=0` on the spawner for throwaway nodes with a clean `/home/pi` on every spawn.
+
+**Back up the fleet config:**
+
+```bash
+docker run --rm -v pi_fleet_data:/d -v "$PWD":/b alpine tar czf /b/pi-fleet-config.tgz -C /d .
+```
 
 ---
 
@@ -291,7 +411,10 @@ Node names are normalised to lowercase letters, digits and dashes and become con
 | Variable | Default | Purpose |
 |---|---|---|
 | `PFE_DATA_DIR` | `/data` in Docker, repo root with `run.py` | Where `fleet-config.json` and `docker-compose.generated.yml` are kept |
-| `PFE_NODE_BASE` | `<repo>/node-base` | Build context for the Pi node image |
+| `PFE_NODE_BASE` | `<repo>/node-base` | Build context for the Pi node image (used when `PFE_NODE_IMAGE` is empty) |
+| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.0` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
+| `PFE_PERSIST_HOME` | `1` | `1` = each node gets a persistent `/home/pi` volume, `0` = throwaway nodes |
+| `PFE_URL` | `http://127.0.0.1:7070` | Where the `pfe` CLI finds the spawner (when run outside the container) |
 
 ---
 
@@ -349,13 +472,15 @@ This is a **local test bed**, not something to expose on a network.
 
 | Symptom | Fix |
 |---|---|
-| Spawn hangs on first run | The node image is building (apt + npm). Give it 2-5 min; check `docker compose logs -f` for the spawner. |
+| Spawn hangs on first run | The node image is being pulled (Option A) or built (Option B, 2-5 min). Check `docker compose logs -f`. |
+| `pfe validate` shows `NODE_RED FAIL` right after spawn | Node-RED needs ~20 s to start. Use `--validate` (it waits) or validate again. |
+| Spawner shows *unhealthy* | It can't reach Docker: check Docker is running and `/var/run/docker.sock` is mounted (`pfe health`). |
 | `port is already allocated` | Another service uses 3000/4000. Change **Base SSH port** / **Base Node-RED port** in the GUI. |
 | `Pool overlaps with other one on this host` | Change **Fleet subnet** (e.g. `10.30.0`). |
 | SSH `Connection refused` right after spawn | sshd starts a few seconds after the container - retry. |
 | `ssh` warns *REMOTE HOST IDENTIFICATION HAS CHANGED* | Respawned nodes get new host keys: `ssh-keygen -R "[localhost]:3000"`. |
 | `host.docker.internal` doesn't resolve (Linux) | Add `extra_hosts: ["host.docker.internal:host-gateway"]` to your fleet manager's container, or use the shared-network option. |
-| Removing everything | Click **Reset** in the GUI, then `docker compose down -v` (also deletes the saved config volume). |
+| Removing everything | `pfe reset --yes` (or **Reset**), then `docker compose down -v` (also deletes the saved config volume). |
 
 ---
 
@@ -364,7 +489,8 @@ This is a **local test bed**, not something to expose on a network.
 ```
 pi-fleet-emulator/
 ├── Dockerfile                  ← Spawner image (Flask + gunicorn + Docker CLI)
-├── docker-compose.yml          ← Spawner stack (recommended way to run)
+├── docker-compose.yml          ← Build-from-source stack
+├── docker-compose.hub.yml      ← Prebuilt Docker Hub images (no clone needed)
 ├── run.py                      ← Alternative: run the spawner on the host
 ├── requirements.txt
 ├── README.md
@@ -373,13 +499,18 @@ pi-fleet-emulator/
 ├── LICENSE-APACHE
 ├── assets/banner.svg           ← Animated hero banner
 ├── .github/workflows/ci.yml    ← Lint + end-to-end fleet smoke test
+├── docker/
+│   ├── publish.sh              ← Multi-arch build + push to Docker Hub
+│   ├── DOCKERHUB-spawner.md    ← Docker Hub description (spawner)
+│   └── DOCKERHUB-node.md       ← Docker Hub description (node)
 │
 ├── spawner/
-│   ├── app.py                  ← Flask spawner (API + GUI, compose generator)
+│   ├── app.py                  ← Flask spawner (API + GUI, compose generator, validation)
+│   ├── pfe.py                  ← `pfe` CLI (spawn / scale / validate / status / reset)
 │   └── templates/
 │       └── index.html          ← Single-page fleet configurator
 │
-└── node-base/                  ← Pi node image (built on first spawn)
+└── node-base/                  ← Pi node image (devprincekumar/pi-fleet-node)
     ├── Dockerfile              ← Ubuntu 22.04 + OpenSSH + Node-RED
     ├── supervisord.conf        ← Runs sshd, Node-RED and fake-metrics
     └── scripts/
@@ -399,12 +530,27 @@ The GUI is a thin client over a small JSON API, which you can also script agains
 |---|---|---|
 | `POST` | `/api/spawn` | Spawn a fleet - body: `{nodes:[{name,arch,debian}], network, base_ssh_port, base_nr_port, edgeshell_network}` |
 | `POST` | `/api/stop` | Stop the fleet - body: `{keep_config: true}` |
-| `POST` | `/api/clear-config` | Stop the fleet and delete saved config |
+| `POST` | `/api/clear-config` | Remove the fleet, saved config and node data volumes |
 | `GET` | `/api/status` | Running nodes with SSH / Node-RED ports |
 | `GET` | `/api/saved-config` | Last spawned config |
+| `GET` | `/api/validate` | Per-node checks + MQTT; HTTP 200 if all pass, 503 otherwise |
+| `GET` | `/api/health` | Docker reachable? Node image, persistence, data dir (used by the image healthcheck) |
 | `GET` | `/api/logs/<container>` | Last 120 log lines of a node |
 | `GET` | `/api/detect-edgeshell-networks` | Docker networks whose name contains `edge` |
 | `GET` | `/api/export-edgeshell` | Download `pi-fleet-nodes.json` |
+
+---
+
+## Publishing to Docker Hub
+
+For maintainers. [docker/publish.sh](docker/publish.sh) builds both images for `linux/amd64` and `linux/arm64` and pushes `:<version>` and `:latest`:
+
+```bash
+docker login -u devprincekumar
+./docker/publish.sh 1.0.0
+```
+
+Then paste [docker/DOCKERHUB-spawner.md](docker/DOCKERHUB-spawner.md) and [docker/DOCKERHUB-node.md](docker/DOCKERHUB-node.md) into each repository's **Overview** on Docker Hub. When you bump the version, update the tags in `docker-compose.hub.yml` too.
 
 ---
 

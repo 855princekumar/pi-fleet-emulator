@@ -15,59 +15,62 @@ jobs:
         with:
           python-version: "3.11"
       - name: Python syntax
-        run: python -m py_compile spawner/app.py run.py
+        run: python -m py_compile spawner/app.py spawner/pfe.py run.py
       - name: Shell syntax
         run: for f in node-base/scripts/*.sh; do bash -n "$f"; done
-      - name: Compose file is valid
-        run: docker compose config --quiet
+      - name: Compose files are valid
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.hub.yml config --quiet
 
   smoke-test:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      PFE: docker exec pi-fleet-spawner pfe
     steps:
       - uses: actions/checkout@v4
 
-      - name: Start spawner
+      - name: Start spawner (build from source)
         run: |
           docker compose up -d --build
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:7070/ >/dev/null && break; sleep 2; done
-          curl -sf http://127.0.0.1:7070/api/status
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:7070/api/health >/dev/null && break; sleep 2; done
+          $PFE health
 
-      - name: Spawn a 2-node fleet (64-bit + 32-bit)
-        run: |
-          curl -sf -X POST -H 'Content-Type: application/json' \
-            -d '{"nodes":[{"name":"node-1","arch":"aarch64","debian":"bookworm"},{"name":"node-2","arch":"armv7l","debian":"bullseye"}]}' \
-            http://127.0.0.1:7070/api/spawn
+      - name: Spawn 2 nodes and validate (arch, OS, SSH, Node-RED, metrics, MQTT)
+        run: $PFE spawn 2 --validate
 
-      - name: Verify simulation
+      - name: Node data persists across stop / start
         run: |
-          test "$(docker exec pi-emu-node-1 uname -m)" = aarch64
-          test "$(docker exec pi-emu-node-2 uname -m)" = armv7l
-          docker exec pi-emu-node-2 grep -q 'VERSION_ID="11"' /etc/os-release
-          docker exec pi-emu-node-1 python3 -c "import platform; assert platform.machine() == 'aarch64'"
+          docker exec -u pi pi-emu-node-1 sh -c 'echo kept > /home/pi/ci.txt'
+          $PFE stop
+          $PFE scale 2 --validate
+          test "$(docker exec pi-emu-node-1 cat /home/pi/ci.txt)" = kept
 
-      - name: Verify SSH and Node-RED
+      - name: Fleet config persists across spawner restart
         run: |
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4000/ >/dev/null && break; sleep 2; done
+          docker restart pi-fleet-spawner
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:7070/api/health >/dev/null && break; sleep 2; done
+          $PFE validate
+
+      - name: Scale up to 3, then down to 2
+        run: |
+          $PFE scale 3 --validate
+          $PFE scale 2 --validate
+          test "$($PFE status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])')" = 2
+
+      - name: Verify host ports and export
+        run: |
           curl -sf -o /dev/null http://127.0.0.1:4000/
-          curl -sf -o /dev/null http://127.0.0.1:4001/
           timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3000; head -c 7 <&3' | grep -q SSH-2.0
+          $PFE export | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['node_count']==2, d"
 
-      - name: Verify MQTT between nodes
+      - name: Reset removes nodes and all node volumes
         run: |
-          docker exec -d pi-emu-node-1 sh -c 'printf "listener 1883 0.0.0.0\nallow_anonymous true\n" > /tmp/mq.conf && mosquitto -c /tmp/mq.conf'
-          sleep 2
-          docker exec -d pi-emu-node-1 sh -c 'mosquitto_sub -h 127.0.0.1 -t fleet/ci -C 1 > /tmp/got.txt'
-          sleep 1
-          docker exec pi-emu-node-2 mosquitto_pub -h 10.20.0.20 -t fleet/ci -m hello
-          sleep 1
-          test "$(docker exec pi-emu-node-1 cat /tmp/got.txt)" = hello
-
-      - name: Verify export
-        run: |
-          curl -sf http://127.0.0.1:7070/api/export-edgeshell | python3 -c \
-            "import json,sys; d=json.load(sys.stdin); assert d['node_count']==2, d"
+          $PFE reset --yes
+          test -z "$(docker ps -q --filter name=pi-emu-)"
+          test -z "$(docker volume ls -q --filter label=com.docker.compose.project=pi-fleet)"
 
       - name: Logs on failure
         if: failure()
@@ -78,5 +81,5 @@ jobs:
       - name: Tear down
         if: always()
         run: |
-          curl -s -X POST http://127.0.0.1:7070/api/clear-config || true
+          $PFE reset --yes || true
           docker compose down -v

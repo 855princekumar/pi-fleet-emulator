@@ -5,7 +5,7 @@ Flask GUI + API that configures and launches simulated Raspberry Pi nodes.
 Runs either inside Docker (docker compose up - talks to the host engine via the
 mounted socket) or directly on the host (python run.py).
 """
-import subprocess, json, os, re, time
+import subprocess, json, os, re, time, threading
 from flask import Flask, render_template, request, jsonify, Response
 
 app = Flask(__name__)
@@ -17,8 +17,13 @@ COMPOSE_FILE = os.path.join(DATA_DIR, 'docker-compose.generated.yml')
 CONFIG_FILE  = os.path.join(DATA_DIR, 'fleet-config.json')
 PROJECT      = 'pi-fleet'   # fixed compose project name, wherever the file lives
 MAX_NODES    = 20
+# Prebuilt node image (e.g. from Docker Hub). Empty = build it locally from NODE_BASE.
+NODE_IMAGE   = os.environ.get('PFE_NODE_IMAGE', '').strip()
+# Give every node a named volume for /home/pi (Node-RED flows, user files).
+PERSIST_HOME = os.environ.get('PFE_PERSIST_HOME', '1') != '0'
 
 os.makedirs(DATA_DIR, exist_ok=True)
+FLEET_LOCK = threading.Lock()   # one compose operation at a time
 
 DEBIAN_VERSIONS = [
     {'id': 'bookworm', 'label': 'Debian 12 Bookworm (latest, recommended)'},
@@ -149,21 +154,25 @@ def saved_config_route():
 def spawn():
     cfg, err = validate(request.get_json(silent=True) or {})
     if err: return jsonify({'error': err}), 400
-
-    save_config(cfg)
-    compose = _build_compose(cfg['nodes'], cfg['network'], cfg['base_ssh_port'],
-                             cfg['base_nr_port'], cfg['edgeshell_network'])
-    with open(COMPOSE_FILE, 'w') as f: f.write(compose)
+    if not FLEET_LOCK.acquire(blocking=False):
+        return jsonify({'error': 'Another spawn is still running - wait for it to finish'}), 409
 
     try:
+        save_config(cfg)
+        compose = _build_compose(cfg['nodes'], cfg['network'], cfg['base_ssh_port'],
+                                 cfg['base_nr_port'], cfg['edgeshell_network'])
+        with open(COMPOSE_FILE, 'w') as f: f.write(compose)
+
         r = subprocess.run(compose_cmd('up', '--build', '-d', '--remove-orphans'),
-                           capture_output=True, text=True, timeout=600, cwd=DATA_DIR)
+                           capture_output=True, text=True, timeout=1200, cwd=DATA_DIR)
         if r.returncode != 0:
             return jsonify({'error': r.stderr[-3000:] or r.stdout[-1000:]}), 500
     except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Build timed out (>10 min)'}), 500
+        return jsonify({'error': 'Spawn timed out (>20 min)'}), 500
     except FileNotFoundError:
         return jsonify({'error': 'docker not found - is Docker running (and the socket mounted)?'}), 500
+    finally:
+        FLEET_LOCK.release()
 
     return jsonify({'success': True, 'node_count': len(cfg['nodes'])})
 
@@ -172,14 +181,27 @@ def stop():
     data = request.get_json(silent=True) or {}
     keep = data.get('keep_config', True)
     if os.path.isfile(COMPOSE_FILE):
-        subprocess.run(compose_cmd('down'), capture_output=True, timeout=120, cwd=DATA_DIR)
+        with FLEET_LOCK:
+            subprocess.run(compose_cmd('down'), capture_output=True, timeout=120, cwd=DATA_DIR)
     if not keep: clear_config()
     return jsonify({'success': True, 'config_kept': keep})
 
 @app.route('/api/clear-config', methods=['POST'])
 def clear_config_route():
+    # Full reset: containers, saved config AND each node's /home/pi volume
     if os.path.isfile(COMPOSE_FILE):
-        subprocess.run(compose_cmd('down'), capture_output=True, timeout=120, cwd=DATA_DIR)
+        with FLEET_LOCK:
+            subprocess.run(compose_cmd('down', '-v'), capture_output=True, timeout=120, cwd=DATA_DIR)
+    # Also volumes of nodes removed earlier by scaling down
+    try:
+        r = subprocess.run(['docker', 'volume', 'ls', '-q', '--filter',
+                            f'label=com.docker.compose.project={PROJECT}'],
+                           capture_output=True, text=True, timeout=10)
+        vols = r.stdout.split()
+        if vols:
+            subprocess.run(['docker', 'volume', 'rm', *vols], capture_output=True, timeout=60)
+    except Exception:
+        pass
     clear_config()
     return jsonify({'success': True})
 
@@ -206,6 +228,88 @@ def logs(container):
         return jsonify({'logs': r.stdout + r.stderr})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/health')
+def health():
+    try:
+        r = subprocess.run(['docker', 'version', '--format', '{{.Server.Version}}'],
+                           capture_output=True, text=True, timeout=8)
+        engine = r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        engine = None
+    return jsonify({'ok': engine is not None, 'docker_engine': engine,
+                    'node_image': NODE_IMAGE or 'pi-fleet-node:local (built from source)',
+                    'persist_home': PERSIST_HOME, 'data_dir': DATA_DIR}), (200 if engine else 503)
+
+NODE_CHECK = r"""
+uname -m
+. /etc/os-release; echo "$VERSION_CODENAME"
+(exec 3<>/dev/tcp/127.0.0.1/22; head -c 7 <&3) 2>/dev/null; echo
+curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:1880/; echo
+test -s /tmp/metrics/summary.txt && echo yes || echo no
+"""
+
+MQTT_BROKER = r"""
+[ -f /tmp/pfe-mq.pid ] && kill "$(cat /tmp/pfe-mq.pid)" 2>/dev/null
+rm -f /tmp/pfe-mq.out /tmp/pfe-mq.pid
+printf 'listener 18830 0.0.0.0\nallow_anonymous true\npid_file /tmp/pfe-mq.pid\n' > /tmp/pfe-mq.conf
+mosquitto -c /tmp/pfe-mq.conf -d; sleep 1
+(mosquitto_sub -p 18830 -t pfe/validate -C 1 -W 8 > /tmp/pfe-mq.out &)
+sleep 1
+"""
+
+def _exec(container, script, timeout=20):
+    r = subprocess.run(['docker', 'exec', container, 'bash', '-c', script],
+                       capture_output=True, text=True, timeout=timeout)
+    return r.returncode, r.stdout
+
+def validate_fleet():
+    """Check every configured node from the inside: arch, OS, SSH, Node-RED, metrics, MQTT."""
+    cfg     = load_config() or {}
+    want    = cfg.get('nodes', [])
+    running = {c['Names'] for c in docker_ps()}
+    report  = []
+    for n in want:
+        sname  = service_name(n['name'])
+        checks = {'running': sname in running}
+        if checks['running']:
+            try:
+                _, out = _exec(sname, NODE_CHECK)
+                lines = (out.splitlines() + [''] * 5)[:5]
+            except Exception:
+                lines = [''] * 5
+            checks.update({
+                'arch':     lines[0].strip() == n['arch'],
+                'os':       lines[1].strip() == n['debian'],
+                'ssh':      lines[2].startswith('SSH-2.0'),
+                'node_red': lines[3].strip() == '200',
+                'metrics':  lines[4].strip() == 'yes',
+            })
+        report.append({'name': sname, 'arch': n['arch'], 'debian': n['debian'],
+                       'ok': all(checks.values()), 'checks': checks})
+
+    # Node-to-node MQTT over the fleet network (first two running nodes)
+    mqtt = None
+    up = [i for i, n in enumerate(want) if service_name(n['name']) in running]
+    if len(up) >= 2:
+        a, b = (service_name(want[i]['name']) for i in up[:2])
+        a_ip = f"{cfg.get('network', '10.20.0')}.{20 + up[0]}"
+        try:
+            _exec(a, MQTT_BROKER)
+            _exec(b, f'mosquitto_pub -h {a_ip} -p 18830 -t pfe/validate -m ok')
+            time.sleep(1)
+            _, got = _exec(a, 'cat /tmp/pfe-mq.out; kill "$(cat /tmp/pfe-mq.pid)" 2>/dev/null; rm -f /tmp/pfe-mq.*')
+            mqtt = {'from': b, 'to': a, 'ok': got.strip() == 'ok'}
+        except Exception:
+            mqtt = {'from': b, 'to': a, 'ok': False}
+
+    ok = bool(want) and all(r['ok'] for r in report) and (mqtt is None or mqtt['ok'])
+    return {'ok': ok, 'expected': len(want), 'running': len(up), 'nodes': report, 'mqtt': mqtt}
+
+@app.route('/api/validate')
+def validate_route():
+    result = validate_fleet()
+    return jsonify(result), (200 if result['ok'] else 503)
 
 @app.route('/api/detect-edgeshell-networks')
 def detect_networks():
@@ -252,8 +356,11 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
               f'          gateway: {prefix}.1']
     if es_network:
         lines += [f'  {es_network}:','    external: true']
+    if PERSIST_HOME:
+        lines += ['', 'volumes:'] + [f'  {service_name(n["name"])}-home: {{}}' for n in nodes]
     lines += ['','services:']
     context = NODE_BASE.replace('\\', '/')
+    image   = NODE_IMAGE or 'pi-fleet-node:local'
     for i, node in enumerate(nodes):
         sname  = service_name(node['name'])
         arch   = node['arch']
@@ -263,16 +370,10 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
         ssh_p  = base_ssh + i
         nr_p   = base_nr  + i
         ip     = f'{prefix}.{20+i}'
+        lines += [f'  {sname}:', f'    image: {image}']
+        if not NODE_IMAGE:
+            lines += [f'    build:', f'      context: "{context}"']
         lines += [
-            f'  {sname}:',
-            f'    build:',
-            f'      context: "{context}"',
-            f'      args:',
-            f'        NODE_NAME: "{sname}"',
-            f'        NODE_USER: "pi"',
-            f'        NODE_PASSWORD: "raspberry"',
-            f'        NODE_ARCH: "{arch}"',
-            f'        NODE_OS: "{os_str}"',
             f'    container_name: {sname}',
             f'    hostname: {sname}',
             f'    restart: unless-stopped',
@@ -290,6 +391,8 @@ def _build_compose(nodes, network, base_ssh, base_nr, es_network=''):
             f'        ipv4_address: {ip}',
         ]
         if es_network: lines.append(f'      {es_network}: {{}}')
+        if PERSIST_HOME:
+            lines += ['    volumes:', f'      - {sname}-home:/home/pi']
         lines += ['    cap_add:','      - SYS_PTRACE']
     return '\n'.join(lines)+'\n'
 

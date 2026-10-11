@@ -1,0 +1,39 @@
+# ============================================================
+#  Pi Fleet Emulator - run from Docker Hub (no source needed)
+#
+#  Start:     docker compose -f docker-compose.hub.yml up -d
+#  Open:      http://localhost:7070
+#  Spawn:     docker exec pi-fleet-spawner pfe spawn 3 --validate
+#  Scale:     docker exec pi-fleet-spawner pfe scale 10 --validate
+#  Validate:  docker exec pi-fleet-spawner pfe validate
+#  Stop:      docker exec pi-fleet-spawner pfe stop     (keeps config + node data)
+#  Remove:    docker exec pi-fleet-spawner pfe reset --yes
+#             docker compose -f docker-compose.hub.yml down -v
+#
+#  Persistent data (Docker named volumes):
+#    pi_fleet_data             fleet config + generated compose (the spawner)
+#    pi-fleet_pi-emu-<n>-home  /home/pi of each node (Node-RED flows, files)
+# ============================================================
+
+services:
+  pi-fleet-spawner:
+    image: devprincekumar/pi-fleet-spawner:1.0.0
+    container_name: pi-fleet-spawner
+    restart: unless-stopped
+    ports:
+      # Bound to localhost only: the GUI controls your Docker engine.
+      - "127.0.0.1:7070:7070"
+    volumes:
+      # Lets the spawner create the Pi node containers on this host
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Fleet config survives restarts, upgrades and reboots
+      - pi_fleet_data:/data
+    environment:
+      # Prebuilt Pi node image, pulled on first spawn
+      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.0.0
+      # 1 = give each node a persistent /home/pi volume, 0 = throwaway nodes
+      PFE_PERSIST_HOME: "1"
+
+volumes:
+  pi_fleet_data:
+    name: pi_fleet_data

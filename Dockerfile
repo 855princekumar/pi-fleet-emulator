@@ -29,8 +29,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy spawner app
+# Copy spawner app + the pfe command line
 COPY spawner/ ./spawner/
+RUN printf '#!/bin/sh\nexec python /app/spawner/pfe.py "$@"\n' > /usr/local/bin/pfe \
+    && chmod +x /usr/local/bin/pfe
 
 # Copy node-base so the spawner can build Pi node images
 COPY node-base/ ./node-base/
@@ -40,13 +42,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PFE_DATA_DIR=/data \
     PFE_NODE_BASE=/app/node-base
 
+# Fleet config + generated compose file live here: mount a volume to persist them
+VOLUME ["/data"]
+
 EXPOSE 7070
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -sf http://localhost:7070/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:7070/api/health || exit 1
 
 CMD ["gunicorn", \
      "--workers", "1", \
+     "--threads", "8", \
      "--bind", "0.0.0.0:7070", \
      "--timeout", "600", \
      "--chdir", "/app/spawner", \

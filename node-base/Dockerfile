@@ -9,6 +9,13 @@
 
 FROM ubuntu:22.04
 
+LABEL org.opencontainers.image.title="Pi Fleet Emulator - Node" \
+      org.opencontainers.image.description="Simulated Raspberry Pi node: OpenSSH, Node-RED, ARM arch and Raspberry Pi OS reporting" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/855princekumar/pi-fleet-emulator" \
+      org.opencontainers.image.authors="855princekumar"
+
 ARG NODE_NAME=edge-node
 ARG NODE_USER=pi
 ARG NODE_PASSWORD=raspberry
