@@ -3,7 +3,7 @@
 # then (optionally) set each repository's description on Docker Hub.
 #
 #   docker login -u devprincekumar
-#   ./docker/publish.sh                 # version 1.0.1
+#   ./docker/publish.sh                 # version 1.0.2
 #   ./docker/publish.sh 1.1.0
 #   ./docker/publish.sh --describe-only # only update the Docker Hub descriptions
 #
@@ -18,7 +18,7 @@ PLATFORMS="${PFE_PLATFORMS:-linux/amd64,linux/arm64}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESCRIBE_ONLY=0
 if [ "${1:-}" = "--describe-only" ]; then DESCRIBE_ONLY=1; shift; fi
-VERSION="${1:-1.0.1}"
+VERSION="${1:-1.0.2}"
 
 [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "Version must be X.Y.Z" >&2; exit 1; }
 MAJOR="${BASH_REMATCH[1]}"; MINOR="${BASH_REMATCH[2]}"

@@ -48,7 +48,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Labels last so changing values never bust the layer cache.
 # Filled in by docker/publish.sh; defaults keep plain `docker build` working
-ARG VERSION=1.0.1
+ARG VERSION=1.0.2
 ARG REVISION=unknown
 ARG CREATED=unknown
 

@@ -52,7 +52,10 @@ RUN npm install -g npm@12.2.0 \
 # Create the edge node user (mimics pi user on Raspberry Pi).
 # The password is set at container start from NODE_PASSWORD (default: raspberry),
 # so it never lives in the image history.
-RUN useradd -m -s /bin/bash ${NODE_USER} \
+# Newer Ubuntu images ship an 'ubuntu' user at UID 1000; remove it so pi is 1000
+# like on a real Pi (and existing /home/pi volumes keep working after upgrades).
+RUN (userdel -r ubuntu 2>/dev/null || true) \
+    && useradd -m -u 1000 -s /bin/bash ${NODE_USER} \
     && usermod -aG sudo ${NODE_USER} \
     && echo "${NODE_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
@@ -80,7 +83,7 @@ EXPOSE 22 1880
 
 # Labels last so changing values never bust the layer cache.
 # Filled in by docker/publish.sh; defaults keep plain `docker build` working
-ARG VERSION=1.0.1
+ARG VERSION=1.0.2
 ARG REVISION=unknown
 ARG CREATED=unknown
 

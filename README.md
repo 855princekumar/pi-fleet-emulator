@@ -12,7 +12,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![GitHub release](https://img.shields.io/github/v/release/855princekumar/pi-fleet-emulator?sort=semver&logo=github)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-[![Version](https://img.shields.io/badge/version-1.0.1-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
+[![Version](https://img.shields.io/badge/version-1.0.2-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#quick-start)
 
@@ -414,7 +414,7 @@ Node names are normalised to lowercase letters, digits and dashes and become con
 |---|---|---|
 | `PFE_DATA_DIR` | `/data` in Docker, repo root with `run.py` | Where `fleet-config.json` and `docker-compose.generated.yml` are kept |
 | `PFE_NODE_BASE` | `<repo>/node-base` | Build context for the Pi node image (used when `PFE_NODE_IMAGE` is empty) |
-| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.1` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
+| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.2` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
 | `PFE_PERSIST_HOME` | `1` | `1` = each node gets a persistent `/home/pi` volume, `0` = throwaway nodes |
 | `PFE_BIND_ADDR` | `127.0.0.1` | Host address for node SSH / Node-RED ports. `0.0.0.0` exposes them to the LAN (set a strong `PFE_NODE_PASSWORD` too) |
 | `PFE_NODE_PASSWORD` | `raspberry` | Password of the `pi` user on every node, set when each node starts |
