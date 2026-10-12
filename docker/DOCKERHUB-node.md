@@ -10,7 +10,7 @@ Usually run by the **[spawner](https://hub.docker.com/r/devprincekumar/pi-fleet-
 
 | Tag | Platforms |
 |---|---|
-| `1.0.2`, `1.0`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
+| `1.1.0`, `1.1`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
 
 Images carry OCI labels, SBOM and provenance attestations.
 
@@ -21,7 +21,7 @@ Images carry OCI labels, SBOM and provenance attestations.
 ```yaml
 services:
   pi-node-1:
-    image: devprincekumar/pi-fleet-node:1.0.2
+    image: devprincekumar/pi-fleet-node:1.1.0
     hostname: pi-node-1
     restart: unless-stopped
     ports:
@@ -37,7 +37,7 @@ services:
       - pi-node-1-home:/home/pi          # keeps Node-RED flows and files
 
   pi-node-2:
-    image: devprincekumar/pi-fleet-node:1.0.2
+    image: devprincekumar/pi-fleet-node:1.1.0
     hostname: pi-node-2
     restart: unless-stopped
     ports:

@@ -12,7 +12,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 [![GitHub release](https://img.shields.io/github/v/release/855princekumar/pi-fleet-emulator?sort=semver&logo=github)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-[![Version](https://img.shields.io/badge/version-1.0.2-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-informational)](https://github.com/855princekumar/pi-fleet-emulator/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#quick-start)
 
@@ -79,7 +79,7 @@ A self-contained test bed for IoT deployment pipelines, fleet management tools a
 - [Troubleshooting](#troubleshooting)
 - [Project Structure](#project-structure) · [API](#api)
 - [Publishing to Docker Hub](#publishing-to-docker-hub)
-- [Contributing](#contributing)
+- [Contributing](#contributing) · [Changelog](CHANGELOG.md)
 - [License](#license)
 
 ---
@@ -129,7 +129,7 @@ Export the running fleet as JSON for EdgeShell, or script everything through the
 
 **✅ Tested in CI**
 
-Every push builds the images, spawns a fleet, then checks validation, scaling, persistence, ports, the export and reset.
+Every push runs 93 unit tests, then builds the images and spawns a real fleet: validation, scaling, persistence, attack checks, security scans and reset.
 
 </td>
 </tr>
@@ -414,7 +414,7 @@ Node names are normalised to lowercase letters, digits and dashes and become con
 |---|---|---|
 | `PFE_DATA_DIR` | `/data` in Docker, repo root with `run.py` | Where `fleet-config.json` and `docker-compose.generated.yml` are kept |
 | `PFE_NODE_BASE` | `<repo>/node-base` | Build context for the Pi node image (used when `PFE_NODE_IMAGE` is empty) |
-| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.0.2` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
+| `PFE_NODE_IMAGE` | empty (build from source); `devprincekumar/pi-fleet-node:1.1.0` in `docker-compose.hub.yml` | Prebuilt node image to run instead of building |
 | `PFE_PERSIST_HOME` | `1` | `1` = each node gets a persistent `/home/pi` volume, `0` = throwaway nodes |
 | `PFE_BIND_ADDR` | `127.0.0.1` | Host address for node SSH / Node-RED ports. `0.0.0.0` exposes them to the LAN (set a strong `PFE_NODE_PASSWORD` too) |
 | `PFE_NODE_PASSWORD` | `raspberry` | Password of the `pi` user on every node, set when each node starts |
@@ -502,17 +502,34 @@ pi-fleet-emulator/
 ├── docker-compose.yml          ← Build-from-source stack
 ├── docker-compose.hub.yml      ← Prebuilt Docker Hub images (no clone needed)
 ├── run.py                      ← Alternative: run the spawner on the host
-├── requirements.txt
+├── requirements.txt            ← Runtime dependencies
+├── requirements-dev.txt        ← + pytest, for the unit tests
+├── .dockerignore               ← Keeps .git, venvs and caches out of build contexts
+├── .gitattributes              ← Forces LF endings on shell scripts
+│
 ├── README.md
+├── CHANGELOG.md                ← Every release, source of the GitHub Release notes
+├── CONTRIBUTING.md             ← Dev setup, tests, conventions
+├── CODE_OF_CONDUCT.md
+├── SECURITY.md                 ← Private vulnerability reporting + threat model
 ├── TEST-PLAYGROUND.md          ← Validated MQTT / telemetry / stress scenarios
 ├── LICENSE-MIT
 ├── LICENSE-APACHE
-├── assets/banner.svg           ← Animated hero banner
-├── .github/workflows/
-│   ├── ci.yml                  ← Lint + end-to-end fleet smoke test (every push / PR)
-│   └── release.yml             ← Tag vX.Y.Z → Docker Hub images + GitHub Release
+│
+├── assets/
+│   ├── banner.svg              ← Animated hero banner
+│   └── social-preview.png      ← 1280x640 link preview image
+│
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml              ← Unit tests, fleet smoke test, security gates, release dry-run
+│   │   └── release.yml         ← Tag vX.Y.Z → Docker Hub images + GitHub Release
+│   ├── dependabot.yml          ← Weekly updates: actions, base images, pip
+│   ├── ISSUE_TEMPLATE/         ← Bug report and feature request forms
+│   └── pull_request_template.md
+│
 ├── docker/
-│   ├── publish.sh              ← Multi-arch build + push to Docker Hub
+│   ├── publish.sh              ← Manual multi-arch build + push (fallback to CI)
 │   ├── DOCKERHUB-spawner.md    ← Docker Hub description (spawner)
 │   └── DOCKERHUB-node.md       ← Docker Hub description (node)
 │
@@ -522,11 +539,18 @@ pi-fleet-emulator/
 │   └── templates/
 │       └── index.html          ← Single-page fleet configurator
 │
+├── tests/                      ← pytest suite (Docker mocked)
+│   ├── conftest.py             ← Fixtures: temp data dir, fake docker CLI
+│   ├── test_validation.py      ← Input validation and name sanitising
+│   ├── test_security.py        ← DNS-rebinding / CSRF guard, headers, env checks
+│   ├── test_compose.py         ← Generated compose: ports, binding, secrets, volumes
+│   └── test_fleet.py           ← Fleet validation, export, pfe CLI
+│
 └── node-base/                  ← Pi node image (devprincekumar/pi-fleet-node)
-    ├── Dockerfile              ← Ubuntu 22.04 + OpenSSH + Node-RED
+    ├── Dockerfile              ← Ubuntu 22.04 + OpenSSH + Node-RED 5 on Node.js 22
     ├── supervisord.conf        ← Runs sshd, Node-RED and fake-metrics
     └── scripts/
-        ├── entrypoint.sh       ← Boot: arch, os-release, logs, supervisord
+        ├── entrypoint.sh       ← Boot: host keys, password, arch, os-release, supervisord
         ├── fake-metrics.sh     ← CPU / memory / temp / load metrics
         ├── fake-docker-stats.sh← Simulated docker + systemctl binaries
         └── node-info.sh        ← Quick diagnostic helper
@@ -570,7 +594,7 @@ flowchart LR
 
 **To release:**
 
-1. Bump the version in `docker-compose.hub.yml` (both image tags), the README version badge, and the `VERSION` defaults in both Dockerfiles
+1. Bump the version in `docker-compose.hub.yml` (both image tags), the README version badge and the `VERSION` defaults in both Dockerfiles, and add a `## [X.Y.Z]` section to `CHANGELOG.md` (it becomes the release notes)
 2. Commit and push to `main`, wait for CI to pass
 3. Tag and push:
 
@@ -579,7 +603,7 @@ flowchart LR
    git push origin v1.1.0
    ```
 
-The [Release workflow](.github/workflows/release.yml) refuses to run if the tag doesn't match the versions in the repo, then builds, pushes, syncs the descriptions from [docker/DOCKERHUB-spawner.md](docker/DOCKERHUB-spawner.md) / [docker/DOCKERHUB-node.md](docker/DOCKERHUB-node.md) and creates the GitHub Release.
+The [Release workflow](.github/workflows/release.yml) refuses to run if the tag doesn't match the versions in the repo or the CHANGELOG has no entry for it, then builds, pushes, syncs the descriptions from [docker/DOCKERHUB-spawner.md](docker/DOCKERHUB-spawner.md) / [docker/DOCKERHUB-node.md](docker/DOCKERHUB-node.md) and creates the GitHub Release.
 
 **Manual fallback** from your machine: `docker login -u devprincekumar && ./docker/publish.sh 1.1.0`.
 
@@ -587,11 +611,15 @@ The [Release workflow](.github/workflows/release.yml) refuses to run if the tag 
 
 ## Contributing
 
-Issues and pull requests are welcome. Good first areas: more simulated Pi commands (`vcgencmd`, `raspi-config`), GPIO stubs, and per-node resource limits.
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and conventions, and the [Code of Conduct](CODE_OF_CONDUCT.md). Please report security issues privately as described in [SECURITY.md](SECURITY.md).
 
-When changing shell scripts under `node-base/`, keep LF line endings (enforced by `.gitattributes`) - CRLF breaks them inside the container.
+Good first areas: more simulated Pi commands (`vcgencmd`, `raspi-config`), GPIO stubs, and per-node resource limits.
 
-Every pull request runs [CI](.github/workflows/ci.yml): Python and shell syntax checks, then a real 2-node spawn that checks the arch, OS, SSH, Node-RED, MQTT and the export. To run the same checks locally, follow the steps in that file.
+```bash
+pip install -r requirements-dev.txt && python -m pytest -q tests   # 93 unit tests, no Docker needed
+```
+
+Every pull request runs [CI](.github/workflows/ci.yml): unit tests, a real 2-node fleet (validation, scaling, persistence, attack checks), image security scans and a release dry-run. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

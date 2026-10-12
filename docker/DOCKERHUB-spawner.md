@@ -12,9 +12,9 @@ Spawn, scale and validate a **simulated Raspberry Pi fleet** in Docker. Every no
 
 | Tag | Platforms |
 |---|---|
-| `1.0.2`, `1.0`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
+| `1.1.0`, `1.1`, `1`, `latest` | `linux/amd64`, `linux/arm64` |
 
-Pin `1.0.2` for reproducible setups. Images carry OCI labels, SBOM and provenance attestations.
+Pin `1.1.0` for reproducible setups. Images carry OCI labels, SBOM and provenance attestations.
 
 ## Quick start
 
@@ -23,7 +23,7 @@ Pin `1.0.2` for reproducible setups. Images carry OCI labels, SBOM and provenanc
 ```yaml
 services:
   pi-fleet-spawner:
-    image: devprincekumar/pi-fleet-spawner:1.0.2
+    image: devprincekumar/pi-fleet-spawner:1.1.0
     container_name: pi-fleet-spawner
     restart: unless-stopped
     ports:
@@ -32,7 +32,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock   # creates the Pi nodes
       - pi_fleet_data:/data                         # fleet config persists here
     environment:
-      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.0.2
+      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.1.0
       PFE_PERSIST_HOME: "1"                         # each node keeps its /home/pi
       PFE_BIND_ADDR: "127.0.0.1"                    # node ports: this machine only
       PFE_NODE_PASSWORD: "raspberry"                # pi login on every node

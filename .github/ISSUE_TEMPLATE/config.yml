@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/855princekumar/pi-fleet-emulator/security/advisories/new
+    about: Please report security issues privately, not as public issues.
+  - name: Documentation
+    url: https://github.com/855princekumar/pi-fleet-emulator#readme
+    about: Quick start, CLI, persistence, configuration and troubleshooting.

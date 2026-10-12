@@ -17,7 +17,7 @@
 
 services:
   pi-fleet-spawner:
-    image: devprincekumar/pi-fleet-spawner:1.0.2
+    image: devprincekumar/pi-fleet-spawner:1.1.0
     container_name: pi-fleet-spawner
     restart: unless-stopped
     ports:
@@ -30,7 +30,7 @@ services:
       - pi_fleet_data:/data
     environment:
       # Prebuilt Pi node image, pulled on first spawn
-      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.0.2
+      PFE_NODE_IMAGE: devprincekumar/pi-fleet-node:1.1.0
       # 1 = give each node a persistent /home/pi volume, 0 = throwaway nodes
       PFE_PERSIST_HOME: "1"
       # Node SSH/Node-RED ports: 127.0.0.1 = this machine only, 0.0.0.0 = whole LAN

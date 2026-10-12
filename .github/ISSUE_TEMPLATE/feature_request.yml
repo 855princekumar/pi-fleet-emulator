@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an improvement or a new simulated capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The workflow or tool you're testing, and what's missing.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: For example a simulated command (`vcgencmd`, `raspi-config`), a CLI option or a GUI change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

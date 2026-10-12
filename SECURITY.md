@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| Latest release (`latest`, `1`, `1.0` tags) | Yes |
+| Latest release (`latest`, `1`, `1.1` tags) | Yes |
+| `1.0.1`, `1.0.2` | Security fixes only until the next minor release; please move to `1.1` |
 | `1.0.0` | No - shipped shared SSH host keys, upgrade to the latest release |
 
 ## Reporting a vulnerability

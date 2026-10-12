@@ -33,6 +33,7 @@ jobs:
           grep -q "devprincekumar/pi-fleet-spawner:$V" docker-compose.hub.yml || { echo "::error::docker-compose.hub.yml spawner tag is not $V"; fail=1; }
           grep -q "devprincekumar/pi-fleet-node:$V"    docker-compose.hub.yml || { echo "::error::docker-compose.hub.yml node tag is not $V"; fail=1; }
           grep -q "badge/version-$V-"                  README.md              || { echo "::error::README version badge is not $V"; fail=1; }
+          grep -q "^## \[$V\]"                         CHANGELOG.md           || { echo "::error::CHANGELOG.md has no [$V] section"; fail=1; }
           exit $fail
 
   images:
@@ -136,7 +137,10 @@ jobs:
           V: ${{ needs.check-version.outputs.version }}
         run: |
           MAJOR="${V%%.*}"; MINOR="${V#*.}"; MINOR="${MINOR%%.*}"
-          cat > notes.md <<EOF
+          # This version's CHANGELOG section, without its own heading
+          awk -v v="$V" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > changes.md
+          { cat changes.md; echo; } > notes.md
+          cat >> notes.md <<EOF
           ## Docker images
 
           | Image | Tags | Platforms |
